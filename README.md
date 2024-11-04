@@ -4,6 +4,8 @@
 
 ## Getting Started
 
+Overleaf: https://www.overleaf.com/project/6728b279df3d377fdb23ec7c
+
 After reading the BatchEnsemble paper, you can start by exploring the provided code examples:
 
 * **experiments/skafte/00_batchensemble_mlp.py:** An example experiment demonstrating how to train a BatchEnsemble MLP on the Skafte synthetic dataset from <https://github.com/SkafteNicki/john>.
