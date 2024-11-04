@@ -1,10 +1,12 @@
+
+Overleaf: https://www.overleaf.com/project/6728b279df3d377fdb23ec7c
+
+
 # Parameter Sharing in Neural Networks: 02456 Deep Learning Course project
 
 **BatchEnsemble** is a method for training ensembles of neural networks with shared parameters, allowing for efficient training and improved generalization.
 
 ## Getting Started
-
-Overleaf: https://www.overleaf.com/project/6728b279df3d377fdb23ec7c
 
 After reading the BatchEnsemble paper, you can start by exploring the provided code examples:
 
