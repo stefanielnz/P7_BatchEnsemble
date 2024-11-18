@@ -1,0 +1,10 @@
+torch == 2.5.0
+torchvision == 0.20.0
+typer == 0.12.5
+matplotlib == 3.9.2
+seaborn == 0.13.2
+requests == 2.32.3
+scipy == 1.14.1
+xlrd == 2.0.1
+openpyxl == 3.1.5
+ivon-opt
