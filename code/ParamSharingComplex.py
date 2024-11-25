@@ -133,8 +133,8 @@ class Conv2d(nn.Conv2d, BatchEnsembleMixin):
             in_features=in_channels,
             out_features=out_channels,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_init,  # Corrected from alpha_gamma_init
-            gamma_init=gamma_init,  # Corrected from alpha_gamma_init
+            alpha_init=alpha_init,
+            gamma_init=gamma_init,
             bias=bias,
             device=device,
             dtype=dtype
@@ -276,7 +276,7 @@ class SharedParametersMLP(nn.Module):
         return x
 
 class BatchEnsembleMLP(nn.Module):
-    def __init__(self, input_size=32*32*3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_gamma_init=0.5):
+    def __init__(self, input_size=32*32*3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_init = 0.5, gamma_init=0.5):
         super(BatchEnsembleMLP, self).__init__()
         self.num_classes = num_classes
         self.ensemble_size = ensemble_size
@@ -284,24 +284,24 @@ class BatchEnsembleMLP(nn.Module):
             input_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
         )
         self.relu = nn.ReLU()
         self.fc2 = BELinear(
             hidden_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
         )
         self.relu2 = nn.ReLU()
         self.fc3 = BELinear(
             hidden_size,
             num_classes,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
         )
 
     def forward(self, x):
@@ -312,7 +312,7 @@ class BatchEnsembleMLP(nn.Module):
         return x
 
 class SharedParametersBatchEnsembleMLP(nn.Module):
-    def __init__(self, input_size=32*32*3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_gamma_init=0.5):
+    def __init__(self, input_size=32*32*3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_init = 0.5, gamma_init=0.5):
         super(SharedParametersBatchEnsembleMLP, self).__init__()
         self.num_classes = num_classes
         self.ensemble_size = ensemble_size
@@ -324,15 +324,15 @@ class SharedParametersBatchEnsembleMLP(nn.Module):
             input_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
         )
         self.fc2 = BELinear(
             hidden_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
         )
 
         # Multiple heads for classification
@@ -461,51 +461,51 @@ class SharedParametersCNN(nn.Module):
         return x
 
 class BatchEnsembleCNN(nn.Module):
-    def __init__(self, ensemble_size=4, alpha=0.5, gamma=0.5):
+    def __init__(self, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
         super(BatchEnsembleCNN, self).__init__()
         self.ensemble_size = ensemble_size
         self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn1 = BatchNorm2d(64, ensemble_size=ensemble_size)
         self.conv2 = Conv2d(64, 128, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn2 = BatchNorm2d(128, ensemble_size=ensemble_size)
 
         self.conv3 = Conv2d(128, 256, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn3 = BatchNorm2d(256, ensemble_size=ensemble_size)
         self.conv4 = Conv2d(256, 256, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn4 = BatchNorm2d(256, ensemble_size=ensemble_size)
 
         self.conv5 = Conv2d(256, 512, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn5 = BatchNorm2d(512, ensemble_size=ensemble_size)
         self.conv6 = Conv2d(512, 512, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn6 = BatchNorm2d(512, ensemble_size=ensemble_size)
 
         self.conv7 = Conv2d(512, 512, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn7 = BatchNorm2d(512, ensemble_size=ensemble_size)
         self.conv8 = Conv2d(512, 512, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.bn8 = BatchNorm2d(512, ensemble_size=ensemble_size)
 
         self.relu = nn.ReLU()
@@ -513,16 +513,16 @@ class BatchEnsembleCNN(nn.Module):
 
         self.fc1 = BELinear(512, 4096,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.fc2 = BELinear(4096, 4096,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
         self.fc3 = BELinear(4096, 10,
                                ensemble_size=ensemble_size,
-                               alpha_init = alpha,
-                               gamma_init= gamma)
+                               alpha_init = alpha_init,
+                               gamma_init= gamma_init)
 
         self.dropout = nn.Dropout()
 
@@ -556,7 +556,7 @@ class BatchEnsembleCNN(nn.Module):
         return x
 
 class SharedParametersBatchEnsembleCNN(nn.Module):
-    def __init__(self, ensemble_size=4, alpha_gamma_init=0.5):
+    def __init__(self, ensemble_size=4, alpha_init = 0.5, gamma_init=0.5):
         super(SharedParametersBatchEnsembleCNN, self).__init__()
         self.ensemble_size = ensemble_size
         self.num_classes = 10
@@ -567,15 +567,15 @@ class SharedParametersBatchEnsembleCNN(nn.Module):
         self.conv1 = Conv2d(
             3, 32, kernel_size=3, padding=1,  # Changed input channels to 3
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
         )
         self.bn1 = BatchNorm2d(32, ensemble_size=ensemble_size)
         self.conv2 = Conv2d(
             32, 64, kernel_size=3, padding=1,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init
+            lpha_init=alpha_init,
+            gamma_init=gamma_init
         )
         self.bn2 = BatchNorm2d(64, ensemble_size=ensemble_size)
         
@@ -583,8 +583,8 @@ class SharedParametersBatchEnsembleCNN(nn.Module):
         self.shared_fc = BELinear(
             64 * 8 * 8, 128,  # Adjusted input size
             ensemble_size=ensemble_size,
-            alpha_init=alpha_gamma_init,
-            gamma_init=alpha_gamma_init
+            lpha_init=alpha_init,
+            gamma_init=gamma_init
         )
         
         # Multiple heads for classification
@@ -755,66 +755,66 @@ def plot_parameters(model, model_name="Model", plot_type="kde", ax=None):
     std = np.std(params)
     median = np.median(params)
     
-    # Plot based on the specified plot type
-    if plot_type == "kde":
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(8, 6))
-        sns.kdeplot(
-            data=df,
-            x='Parameter Value',
-            hue='Type',
-            ax=ax,
-            fill=True,
-            common_norm=False,  # Normalize each KDE separately
-            alpha=0.5
-        )
-        ax.set_xlabel("Parameter Value")
-        ax.set_ylabel("Density")
-        ax.set_title(f"Parameter Distribution (KDE) of {model_name}")
-        # Display statistics
-        ax.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
-                transform=ax.transAxes, fontsize=10,
-                verticalalignment='top', horizontalalignment='right',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+    # # Plot based on the specified plot type
+    # if plot_type == "kde":
+    #     if ax is None:
+    #         fig, ax = plt.subplots(figsize=(8, 6))
+    #     sns.kdeplot(
+    #         data=df,
+    #         x='Parameter Value',
+    #         hue='Type',
+    #         ax=ax,
+    #         fill=True,
+    #         common_norm=False,  # Normalize each KDE separately
+    #         alpha=0.5
+    #     )
+    #     ax.set_xlabel("Parameter Value")
+    #     ax.set_ylabel("Density")
+    #     ax.set_title(f"Parameter Distribution (KDE) of {model_name}")
+    #     # Display statistics
+    #     ax.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
+    #             transform=ax.transAxes, fontsize=10,
+    #             verticalalignment='top', horizontalalignment='right',
+    #             bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
     
-    elif plot_type == "histogram":
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(8, 6))
-        sns.histplot(
-            data=df,
-            x='Parameter Value',
-            hue='Type',
-            multiple='stack',
-            bins=50,
-            kde=False,
-            ax=ax
-        )
-        ax.set_xlabel("Parameter Value")
-        ax.set_ylabel("Count")
-        ax.set_title(f"Parameter Distribution (Histogram) of {model_name}")
-        # Display statistics
-        ax.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
-                transform=ax.transAxes, fontsize=10,
-                verticalalignment='top', horizontalalignment='right',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+    # elif plot_type == "histogram":
+    #     if ax is None:
+    #         fig, ax = plt.subplots(figsize=(8, 6))
+    #     sns.histplot(
+    #         data=df,
+    #         x='Parameter Value',
+    #         hue='Type',
+    #         multiple='stack',
+    #         bins=50,
+    #         kde=False,
+    #         ax=ax
+    #     )
+    #     ax.set_xlabel("Parameter Value")
+    #     ax.set_ylabel("Count")
+    #     ax.set_title(f"Parameter Distribution (Histogram) of {model_name}")
+    #     # Display statistics
+    #     ax.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
+    #             transform=ax.transAxes, fontsize=10,
+    #             verticalalignment='top', horizontalalignment='right',
+    #             bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
     
-    elif plot_type == "facet_hist":
-        # Create a FacetGrid of histograms separated by parameter type
-        g = sns.FacetGrid(df, col="Type", col_wrap=2, sharex=False, sharey=False, height=4)
-        g.map_dataframe(sns.histplot, x="Parameter Value", bins=50, kde=False, color="steelblue")
-        g.set_axis_labels("Parameter Value", "Count")
-        g.fig.suptitle(f"Parameter Distribution (FacetGrid Histogram) of {model_name}", y=1.02)
-        # Adjust layout
-        plt.tight_layout()
-        # Display statistics on the first subplot
-        if len(g.axes.flat) > 0:
-            ax0 = g.axes.flat[0]
-            ax0.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
-                     transform=ax0.transAxes, fontsize=10,
-                     verticalalignment='top', horizontalalignment='right',
-                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
-    else:
-        raise ValueError("Invalid plot_type. Choose from 'kde', 'histogram', or 'facet_hist'.")
+    # elif plot_type == "facet_hist":
+    #     # Create a FacetGrid of histograms separated by parameter type
+    #     g = sns.FacetGrid(df, col="Type", col_wrap=2, sharex=False, sharey=False, height=4)
+    #     g.map_dataframe(sns.histplot, x="Parameter Value", bins=50, kde=False, color="steelblue")
+    #     g.set_axis_labels("Parameter Value", "Count")
+    #     g.fig.suptitle(f"Parameter Distribution (FacetGrid Histogram) of {model_name}", y=1.02)
+    #     # Adjust layout
+    #     plt.tight_layout()
+    #     # Display statistics on the first subplot
+    #     if len(g.axes.flat) > 0:
+    #         ax0 = g.axes.flat[0]
+    #         ax0.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
+    #                  transform=ax0.transAxes, fontsize=10,
+    #                  verticalalignment='top', horizontalalignment='right',
+    #                  bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+    # else:
+    #     raise ValueError("Invalid plot_type. Choose from 'kde', 'histogram', or 'facet_hist'.")
 
 # Main function
 
@@ -826,8 +826,8 @@ def main():
     # Hyperparameters
     ensemble_size = 4
     num_heads = ensemble_size  # For consistency
-    alpha = 0.5
-    gamma = 0.5
+    alpha_init = 0.5
+    gamma_init = 0.5
     num_epochs = 15
     batch_size = 256
     lr = 0.0002
@@ -888,7 +888,8 @@ def main():
         elif model_type == "batchensemble":
             model = BatchEnsembleMLP(
                 ensemble_size=ensemble_size,
-                alpha_gamma_init=alpha_gamma_init
+                alpha_init = alpha_init,
+                gamma_init = gamma_init
             ).to(device)
             ensemble_size_mlp = ensemble_size
         elif model_type == "sharedparameters":
@@ -899,7 +900,8 @@ def main():
         elif model_type == "shared_batchensemble":
             model = SharedParametersBatchEnsembleMLP(
                 ensemble_size=ensemble_size,
-                alpha_gamma_init=alpha_gamma_init
+                alpha_init = alpha_init,
+                gamma_init = gamma_init
             ).to(device)
             ensemble_size_mlp = ensemble_size
         else:
@@ -918,6 +920,7 @@ def main():
         )
         mlp_train_losses[model_type] = tr_losses
         mlp_test_accuracies[model_type] = te_accuracies
+    """
 
     # # Plot MLP training results and parameter distributions
     # # Define plot types
@@ -960,7 +963,7 @@ def main():
     #     )
     #     plt.show()
     #     # Optional: Comment out the plt.show() if you do not want to display each plot immediately
-    """
+    
 
     # Initialize dictionaries to store CNN models and their metrics
     cnn_models = {}
@@ -975,8 +978,8 @@ def main():
         elif model_type == "batchensemble":
             model = BatchEnsembleCNN(
                 ensemble_size=ensemble_size,
-                alpha = alpha,
-                gamma = gamma
+                alpha_init = alpha_init,
+                gamma_init = gamma_init
             ).to(device)
             ensemble_size_cnn = ensemble_size
         elif model_type == "sharedparameters":
@@ -987,8 +990,8 @@ def main():
         elif model_type == "shared_batchensemble":
             model = SharedParametersBatchEnsembleCNN(
                 ensemble_size=ensemble_size,
-                alpha = alpha,
-                gamma = gamma
+                alpha_init = alpha_init,
+                gamma_init = gamma_init
             ).to(device)
             ensemble_size_cnn = ensemble_size
         else:
