@@ -463,6 +463,7 @@ class SharedParametersCNN(nn.Module):
 class BatchEnsembleCNN(nn.Module):
     def __init__(self, ensemble_size=4, alpha=0.5, gamma=0.5):
         super(BatchEnsembleCNN, self).__init__()
+        self.ensemble_size = ensemble_size
         self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1,
                                ensemble_size=ensemble_size,
                                alpha_init = alpha,
@@ -510,7 +511,6 @@ class BatchEnsembleCNN(nn.Module):
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool2d(2)
 
-        # Define the classifier
         self.fc1 = BELinear(512, 4096,
                                ensemble_size=ensemble_size,
                                alpha_init = alpha,
@@ -669,16 +669,24 @@ def train_mnist_model(
                 images = images.to(device)
                 labels = labels.to(device)
                 if model_type == "batchensemble":
+                    # Repeat images for ensemble
                     images = images.repeat(ensemble_size, 1, 1, 1)
-                    outputs = model(images)
-                    # Reshape and average over ensemble instances
-                    outputs = outputs.view(ensemble_size, -1)
-                    outputs = outputs.mean(dim=0)
+                    
+                    # Forward pass through the model
+                    outputs = model(images)  # Shape: [batch_size * ensemble_size, num_classes]
+                    #print("1: ", outputs.shape)  # Debugging: should be [batch_size * ensemble_size, num_classes]
+                    
+                    # Reshape and average over the ensemble
+                    batch_size = outputs.size(0) // ensemble_size
+                    outputs = outputs.view(batch_size, ensemble_size, -1)  # Shape: [batch_size, ensemble_size, num_classes]
+                    #print("2: ", outputs.shape)  # Debugging: should be [batch_size, ensemble_size, num_classes]
+                    outputs = outputs.mean(dim=1)  # Shape: [batch_size, num_classes]
                 elif model_type == "shared_batchensemble":
                     images = images.repeat(ensemble_size, 1, 1, 1)
                     outputs = model(images)
                 else:
                     outputs = model(images)
+                #print("3: ", outputs.shape)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
@@ -851,13 +859,15 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         dataset=train_dataset,
         batch_size=batch_size,
-        shuffle=True
+        shuffle=True,
+        drop_last=True
     )
 
     test_loader = torch.utils.data.DataLoader(
         dataset=test_dataset,
         batch_size=batch_size,
-        shuffle=False
+        shuffle=False,
+        drop_last=True
     )
 
     # Define model types
