@@ -367,9 +367,9 @@ class SharedParametersBatchEnsembleMLP(nn.Module):
         
 # CNN Models
 
-class SimpleCNN(nn.Module):
+class ComplexCNN(nn.Module):
     def __init__(self):
-        super(SimpleCNN, self).__init__()
+        super(ComplexCNN, self).__init__()
 
         # Define the VGG11 feature extractor
         self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1)
@@ -973,7 +973,7 @@ def main():
 # Train and evaluate CNN models
     for model_type in model_types:
         if model_type == "simple":
-            model = SimpleCNN().to(device)
+            model = ComplexCNN().to(device)
             ensemble_size_cnn = 1
         elif model_type == "batchensemble":
             model = BatchEnsembleCNN(
