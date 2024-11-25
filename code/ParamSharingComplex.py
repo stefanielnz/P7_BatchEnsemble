@@ -235,7 +235,7 @@ class StandardScaler:
             self.std = self.std.to(target_device)
         return self
 
-# MLP Models for MNIST
+# MLP Models for CIFAR
 
 class MLP(nn.Module):
     def __init__(self, input_size=32*32*3, hidden_size=256, num_classes=10):
@@ -623,7 +623,7 @@ class SharedParametersBatchEnsembleCNN(nn.Module):
 
 # Training and visualization functions
 
-def train_mnist_model(
+def train_cifar_model(
     model,
     train_loader,
     test_loader,
@@ -696,64 +696,64 @@ def train_mnist_model(
 
     return train_losses, test_accuracies
     
-def plot_training_results(train_losses, test_accuracies, ax, model_type="simple"):
-    ax.plot(train_losses, label="Train loss")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Loss")
-    ax.set_title(f"{model_type.replace('_', ' ').capitalize()} Training Loss")
-    ax.legend()
+# def plot_training_results(train_losses, test_accuracies, ax, model_type="simple"):
+#     ax.plot(train_losses, label="Train loss")
+#     ax.set_xlabel("Epoch")
+#     ax.set_ylabel("Loss")
+#     ax.set_title(f"{model_type.replace('_', ' ').capitalize()} Training Loss")
+#     ax.legend()
 
-    ax2 = ax.twinx()
-    ax2.plot(test_accuracies, label="Test Accuracy", color="orange")
-    ax2.set_ylabel("Accuracy (%)")
-    ax2.legend(loc='lower right')
+#     ax2 = ax.twinx()
+#     ax2.plot(test_accuracies, label="Test Accuracy", color="orange")
+#     ax2.set_ylabel("Accuracy (%)")
+#     ax2.legend(loc='lower right')
     
-@torch.no_grad()
-def plot_parameters(model, model_name="Model", plot_type="kde", ax=None):
-    """
-    Plots the distribution of model parameters using different plot types.
+# @torch.no_grad()
+# def plot_parameters(model, model_name="Model", plot_type="kde", ax=None):
+#     """
+#     Plots the distribution of model parameters using different plot types.
 
-    Parameters:
-    - model (nn.Module): The PyTorch model whose parameters are to be plotted.
-    - model_name (str): A name for the model to be displayed in the plot titles.
-    - plot_type (str): The type of plot to generate. Options are:
-        - 'kde': Kernel Density Estimate plot.
-        - 'histogram': Combined histogram for all parameter types.
-        - 'facet_hist': FacetGrid of histograms separated by parameter type.
-    - ax (matplotlib.axes.Axes, optional): The axes on which to plot. Required for 'kde' and 'histogram' types.
-                                           Not used for 'facet_hist' as it creates its own figure.
-    """
-    # Collect all parameters and categorize them by type
-    params = []
-    tags = []
-    for name, param in model.named_parameters():
-        if "bias" in name:
-            tag = "bias"
-        elif "alpha" in name:
-            tag = "alpha"
-        elif "gamma" in name:
-            tag = "gamma"
-        elif "weight" in name:
-            tag = "weight"
-        else:
-            tag = "other"
-        params.append(param.detach().cpu().flatten())
-        tags += [tag] * param.numel()
+#     Parameters:
+#     - model (nn.Module): The PyTorch model whose parameters are to be plotted.
+#     - model_name (str): A name for the model to be displayed in the plot titles.
+#     - plot_type (str): The type of plot to generate. Options are:
+#         - 'kde': Kernel Density Estimate plot.
+#         - 'histogram': Combined histogram for all parameter types.
+#         - 'facet_hist': FacetGrid of histograms separated by parameter type.
+#     - ax (matplotlib.axes.Axes, optional): The axes on which to plot. Required for 'kde' and 'histogram' types.
+#                                            Not used for 'facet_hist' as it creates its own figure.
+#     """
+#     # Collect all parameters and categorize them by type
+#     params = []
+#     tags = []
+    # for name, param in model.named_parameters():
+    #     if "bias" in name:
+    #         tag = "bias"
+    #     elif "alpha" in name:
+    #         tag = "alpha"
+    #     elif "gamma" in name:
+    #         tag = "gamma"
+    #     elif "weight" in name:
+    #         tag = "weight"
+    #     else:
+    #         tag = "other"
+    #     params.append(param.detach().cpu().flatten())
+    #     tags += [tag] * param.numel()
     
-    # Concatenate all parameters into a single array
-    params = torch.cat(params).numpy()
-    tags = np.array(tags)
+    # # Concatenate all parameters into a single array
+    # params = torch.cat(params).numpy()
+    # tags = np.array(tags)
     
-    # Create a DataFrame for seaborn
-    df = pd.DataFrame({
-        'Parameter Value': params,
-        'Type': tags
-    })
+    # # Create a DataFrame for seaborn
+    # df = pd.DataFrame({
+    #     'Parameter Value': params,
+    #     'Type': tags
+    # })
     
-    # Compute statistics
-    mean = np.mean(params)
-    std = np.std(params)
-    median = np.median(params)
+    # # Compute statistics
+    # mean = np.mean(params)
+    # std = np.std(params)
+    # median = np.median(params)
     
     # # Plot based on the specified plot type
     # if plot_type == "kde":
@@ -871,10 +871,9 @@ def main():
     )
 
     # Define model types
-    model_types = ["batchensemble"]
-    # model_types = ["simple", "batchensemble"]#, "sharedparameters", "shared_batchensemble"]
+    model_types = ["simple", "batchensemble"]#, "sharedparameters", "shared_batchensemble"]
 
-    """
+    
     # Initialize dictionaries to store models and their metrics
     mlp_models = {}
     mlp_train_losses = {}
@@ -908,7 +907,7 @@ def main():
             raise ValueError("Invalid model_type.")
         mlp_models[model_type] = model
         print(f"Training MLP model: {model_type}")
-        tr_losses, te_accuracies = train_mnist_model(
+        tr_losses, te_accuracies = train_cifar_model(
             model,
             train_loader,
             test_loader,
@@ -920,7 +919,7 @@ def main():
         )
         mlp_train_losses[model_type] = tr_losses
         mlp_test_accuracies[model_type] = te_accuracies
-    """
+    
 
     # # Plot MLP training results and parameter distributions
     # # Define plot types
@@ -998,7 +997,7 @@ def main():
             raise ValueError("Invalid model_type.")
         cnn_models[model_type] = model
         print(f"Training CNN model: {model_type}")
-        tr_losses, te_accuracies = train_mnist_model(
+        tr_losses, te_accuracies = train_cifar_model(
             model,
             train_loader,
             test_loader,
