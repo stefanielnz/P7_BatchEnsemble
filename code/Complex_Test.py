@@ -844,7 +844,8 @@ def main():
     torch.manual_seed(seed)
 
     # Hyperparameters
-    ensemble_size = 4
+    ###############HERE TESTEN
+    ensemble_size = 16
     num_heads = ensemble_size  # For consistency
     alpha_init = 0.5
     gamma_init = 0.5
@@ -897,6 +898,8 @@ def main():
     mlp_test_accuracies = {}
 
     # Train and evaluate MLP models
+    """
+    
     for model_type in model_types:
         if model_type == "simple":
             model = MLP().to(device)
@@ -936,6 +939,8 @@ def main():
         )
         mlp_train_losses[model_type] = tr_losses
         mlp_test_accuracies[model_type] = te_accuracies
+
+    """
 
     # # Plot MLP training results and parameter distributions
     # # Define plot types
