@@ -849,12 +849,12 @@ def main():
     ensemble_size = 4
     num_heads = ensemble_size  # For consistency
     # alpha_init = 0.1, 0.5, 1.0
-    alpha_init = 1.5
+    alpha_init = -0.1
     # gamma_init = 0.1, 0.5, 1.0
-    gamma_init = 1.5
+    gamma_init = -0.1
     num_epochs = 15
     # batch_size = 32, 64, 128
-    batch_size = 256
+    batch_size = 64
     # lr = 0.001, 0.0005, 0.01
     # old 0.0002
     lr = 0.0002
