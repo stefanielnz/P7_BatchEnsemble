@@ -481,21 +481,27 @@ class BatchEnsembleCNN(nn.Module):
         self.num_classes = 10
         self.ensemble_size = ensemble_size
         # Convolutional layers
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
-        self.bn1 =  nn.BatchNorm2d(64)
+        self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
+                            gamma_init=gamma_init)
+        self.bn1 = BatchNorm2d(64, ensemble_size=ensemble_size)
 
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(128)
+        self.conv2 = Conv2d(64, 128, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
+                            gamma_init=gamma_init)
+        self.bn2 = BatchNorm2d(128, ensemble_size=ensemble_size)
 
-        self.conv3 =  nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.bn3 =  nn.BatchNorm2d(256)
-        self.conv4 =  nn.Conv2d(256, 256, kernel_size=3, padding=1)
-        self.bn4 =  nn.BatchNorm2d(256)
+        self.conv3 = Conv2d(128, 256, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
+        self.bn3 = BatchNorm2d(256, ensemble_size=ensemble_size)
 
-        self.conv5 =  nn.Conv2d(256, 512, kernel_size=3, padding=1)
-        self.bn5 =  nn.BatchNorm2d(512)
-        self.conv6 =  nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.bn6 =  nn.BatchNorm2d(512)
+        self.conv4 = Conv2d(256, 256, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
+        self.bn4 = BatchNorm2d(256, ensemble_size=ensemble_size)
+
+        self.conv5 = Conv2d(256, 512, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
+                            gamma_init=gamma_init)
+        self.bn5 = BatchNorm2d(512, ensemble_size=ensemble_size)
+
+        self.conv6 = Conv2d(512, 512, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
+                            gamma_init=gamma_init)
+        self.bn6 = BatchNorm2d(512, ensemble_size=ensemble_size)
 
         self.global_pool = nn.AdaptiveAvgPool2d(1)
 
