@@ -845,13 +845,19 @@ def main():
 
     # Hyperparameters
     ###############HERE TESTEN
-    ensemble_size = 16
+    # ensemble_size = 4, 8, 16
+    ensemble_size = 4
     num_heads = ensemble_size  # For consistency
+    # alpha_init = 0.1, 0.5, 1.0
     alpha_init = 0.5
+    # gamma_init = 0.1, 0.5, 1.0
     gamma_init = 0.5
     num_epochs = 15
+    # batch_size = 32, 64, 128
     batch_size = 256
-    lr = 0.0002
+    # lr = 0.001, 0.0005, 0.01
+    # old 0.0005
+    lr = 0.0005
 
     # Define device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
