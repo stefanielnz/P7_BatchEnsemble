@@ -856,8 +856,8 @@ def main():
     # batch_size = 32, 64, 128
     batch_size = 256
     # lr = 0.001, 0.0005, 0.01
-    # old 0.0005
-    lr = 0.0005
+    # old 0.0002
+    lr = 0.01
 
     # Define device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
