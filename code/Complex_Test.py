@@ -145,9 +145,10 @@ class Conv2d(nn.Conv2d, BatchEnsembleMixin):
         )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        x = input
         if self.alpha_init is not None:
-            input = input * self.expand_param(input, self.alpha_param)
-        x = self._conv_forward(input, self.weight, None)
+            x = x * self.expand_param(input, self.alpha_param)
+        x = self._conv_forward(x, self.weight, None)
         if self.gamma_init is not None:
             x = x * self.expand_param(x, self.gamma_param)
         if self.bias_param is not None:
@@ -189,7 +190,7 @@ class BatchNorm2d(nn.BatchNorm2d):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # Use the base class's forward method
         x = super().forward(input)
-        num_repeats = x.size(0) // self.ensemble_size
+        num_repeats = (x.size(0) + self.ensemble_size - 1) // self.ensemble_size
         weight = torch.repeat_interleave(self.weight_be, num_repeats, dim=0).unsqueeze(2).unsqueeze(3)
         bias = torch.repeat_interleave(self.bias_be, num_repeats, dim=0).unsqueeze(2).unsqueeze(3)
         x = x * weight + bias
