@@ -285,7 +285,7 @@ class SharedParametersMLP(nn.Module):
 
 
 class BatchEnsembleMLP(nn.Module):
-    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10, ensemble_size=4, alpha=0.5, gamma=0.5):
+    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
         super(BatchEnsembleMLP, self).__init__()
         self.num_classes = num_classes
         self.ensemble_size = ensemble_size
@@ -293,24 +293,24 @@ class BatchEnsembleMLP(nn.Module):
             input_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha,
-            gamma_init=gamma,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init,
         )
         self.relu = nn.ReLU()
         self.fc2 = BELinear(
             hidden_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha,
-            gamma_init=gamma,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init,
         )
         self.relu2 = nn.ReLU()
         self.fc3 = BELinear(
             hidden_size,
             num_classes,
             ensemble_size=ensemble_size,
-            alpha_init=alpha,
-            gamma_init=gamma,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init,
         )
 
     def forward(self, x):
@@ -322,7 +322,7 @@ class BatchEnsembleMLP(nn.Module):
 
 
 class SharedParametersBatchEnsembleMLP(nn.Module):
-    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10, ensemble_size=4, alpha=0.5, gamma=0.5):
+    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
         super(SharedParametersBatchEnsembleMLP, self).__init__()
         self.num_classes = num_classes
         self.ensemble_size = ensemble_size
@@ -334,15 +334,15 @@ class SharedParametersBatchEnsembleMLP(nn.Module):
             input_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha,
-            gamma_init=gamma,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init,
         )
         self.fc2 = BELinear(
             hidden_size,
             hidden_size,
             ensemble_size=ensemble_size,
-            alpha_init=alpha,
-            gamma_init=gamma,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init,
         )
 
         # Multiple heads for classification
@@ -590,7 +590,7 @@ class SharedParametersBatchEnsembleCNN(nn.Module):
         self.conv2 = Conv2d(
             32, 64, kernel_size=3, padding=1,
             ensemble_size=ensemble_size,
-            lpha_init=alpha_init,
+            alpha_init=alpha_init,
             gamma_init=gamma_init
         )
         self.bn2 = BatchNorm2d(64, ensemble_size=ensemble_size)
@@ -599,7 +599,7 @@ class SharedParametersBatchEnsembleCNN(nn.Module):
         self.shared_fc = BELinear(
             64 * 8 * 8, 128,  # Adjusted input size
             ensemble_size=ensemble_size,
-            lpha_init=alpha_init,
+            alpha_init=alpha_init,
             gamma_init=gamma_init
         )
 
