@@ -479,95 +479,52 @@ class BatchEnsembleCNN(nn.Module):
         super(BatchEnsembleCNN, self).__init__()
         self.num_classes = 10
         self.ensemble_size = ensemble_size
-        self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
+        # Convolutional layers
+        self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
         self.bn1 = BatchNorm2d(64, ensemble_size=ensemble_size)
-        self.conv2 = Conv2d(64, 128, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
+
+        self.conv2 = Conv2d(64, 128, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
         self.bn2 = BatchNorm2d(128, ensemble_size=ensemble_size)
 
-        self.conv3 = Conv2d(128, 256, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
+        self.conv3 = Conv2d(128, 256, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
         self.bn3 = BatchNorm2d(256, ensemble_size=ensemble_size)
-        self.conv4 = Conv2d(256, 256, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
+        self.conv4 = Conv2d(256, 256, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
         self.bn4 = BatchNorm2d(256, ensemble_size=ensemble_size)
 
-        self.conv5 = Conv2d(256, 512, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
+        self.conv5 = Conv2d(256, 512, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
         self.bn5 = BatchNorm2d(512, ensemble_size=ensemble_size)
-        self.conv6 = Conv2d(512, 512, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
+        self.conv6 = Conv2d(512, 512, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
         self.bn6 = BatchNorm2d(512, ensemble_size=ensemble_size)
 
-        self.conv7 = Conv2d(512, 512, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-        self.bn7 = BatchNorm2d(512, ensemble_size=ensemble_size)
-        self.conv8 = Conv2d(512, 512, kernel_size=3, padding=1,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-        self.bn8 = BatchNorm2d(512, ensemble_size=ensemble_size)
+        self.global_pool = nn.AdaptiveAvgPool2d(1)
+
+        # Fully connected layers
+        self.fc1 = BELinear(512, 1024, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
+        self.bn_fc1 = nn.BatchNorm1d(1024)
+        self.fc2 = BELinear(1024, 10, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
 
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool2d(2)
-
-        self.fc1 = BELinear(512, 4096,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-        self.fc2 = BELinear(4096, 4096,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-        self.fc3 = BELinear(4096, 10,
-                            ensemble_size=ensemble_size,
-                            alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-
-        self.dropout = nn.Dropout()
+        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
-        # Convolutional layers
-        x = self.relu(self.bn1(self.conv1(x)))  # [batch_size, 64, 32, 32]
-        x = self.pool(x)  # [batch_size, 64, 16, 16]
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.pool(x)
 
-        x = self.relu(self.bn2(self.conv2(x)))  # [batch_size, 128, 16, 16]
-        x = self.pool(x)  # [batch_size, 128, 8, 8]
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.pool(x)
 
-        x = self.relu(self.bn3(self.conv3(x)))  # [batch_size, 256, 8, 8]
-        x = self.relu(self.bn4(self.conv4(x)))  # [batch_size, 256, 8, 8]
-        x = self.pool(x)  # [batch_size, 256, 4, 4]
+        x = self.relu(self.bn3(self.conv3(x)))
+        x = self.relu(self.bn4(self.conv4(x)))
+        x = self.pool(x)
 
-        x = self.relu(self.bn5(self.conv5(x)))  # [batch_size, 512, 4, 4]
-        x = self.relu(self.bn6(self.conv6(x)))  # [batch_size, 512, 4, 4]
-        x = self.pool(x)  # [batch_size, 512, 2, 2]
+        x = self.relu(self.bn5(self.conv5(x)))
+        x = self.relu(self.bn6(self.conv6(x)))
+        x = self.global_pool(x)
 
-        x = self.relu(self.bn7(self.conv7(x)))  # [batch_size, 512, 2, 2]
-        x = self.relu(self.bn8(self.conv8(x)))  # [batch_size, 512, 2, 2]
-        x = self.pool(x)  # [batch_size, 512, 1, 1]
-
-        # Flatten
-        x = x.view(x.size(0), -1)  # [batch_size, 512*2*2]
-
-        # Fully connected layers
-        x = self.dropout(self.relu(self.fc1(x)))  # [batch_size, 4096]
-        x = self.dropout(self.relu(self.fc2(x)))  # [batch_size, 4096]
-        x = self.fc3(x)  # [batch_size, 10]
+        x = x.view(x.size(0), -1)
+        x = self.dropout(self.relu(self.bn_fc1(self.fc1(x))))
+        x = self.fc2(x)
         return x
 
 
