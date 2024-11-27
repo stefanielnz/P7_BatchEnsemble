@@ -1,14 +1,12 @@
+import sys
+import typer
 # Import necessary libraries
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Iterable
-import seaborn as sns
-import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
-import torch.optim as optim
-import numpy as np
 import pandas as pd
+import os
 
 
 # BatchEnsemble implementation
@@ -137,18 +135,17 @@ class Conv2d(nn.Conv2d, BatchEnsembleMixin):
             in_features=in_channels,
             out_features=out_channels,
             ensemble_size=ensemble_size,
-            alpha_init=alpha_init,  # Corrected from alpha_gamma_init
-            gamma_init=gamma_init,  # Corrected from alpha_gamma_init
+            alpha_init=alpha_init,
+            gamma_init=gamma_init,
             bias=bias,
             device=device,
             dtype=dtype
         )
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        x = input
         if self.alpha_init is not None:
-            x = x * self.expand_param(input, self.alpha_param)
-        x = self._conv_forward(x, self.weight, None)
+            input = input * self.expand_param(input, self.alpha_param)
+        x = self._conv_forward(input, self.weight, None)
         if self.gamma_init is not None:
             x = x * self.expand_param(x, self.gamma_param)
         if self.bias_param is not None:
@@ -190,7 +187,7 @@ class BatchNorm2d(nn.BatchNorm2d):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         # Use the base class's forward method
         x = super().forward(input)
-        num_repeats = (x.size(0) + self.ensemble_size - 1) // self.ensemble_size
+        num_repeats = x.size(0) // self.ensemble_size
         weight = torch.repeat_interleave(self.weight_be, num_repeats, dim=0).unsqueeze(2).unsqueeze(3)
         bias = torch.repeat_interleave(self.bias_be, num_repeats, dim=0).unsqueeze(2).unsqueeze(3)
         x = x * weight + bias
@@ -243,205 +240,26 @@ class StandardScaler:
         return self
 
 
-# MLP Models for MNIST
-
-class MLP(nn.Module):
-    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10):
-        super(MLP, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(hidden_size, num_classes)
-
-    def forward(self, x):
-        x = x.view(x.size(0), -1)  # Flatten
-        x = self.relu(self.fc1(x))
-        x = self.relu2(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
-class SharedParametersMLP(nn.Module):
-    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10, num_heads=4):
-        super(SharedParametersMLP, self).__init__()
-        self.num_heads = num_heads
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.relu2 = nn.ReLU()
-        # Multiple heads for classification
-        self.heads = nn.ModuleList([nn.Linear(hidden_size, num_classes) for _ in range(num_heads)])
-
-    def forward(self, x):
-        x = x.view(x.size(0), -1)  # Flatten
-        x = self.relu(self.fc1(x))
-        x = self.relu2(self.fc2(x))
-        # Collect outputs from all heads
-        outputs = [head(x) for head in self.heads]
-        outputs = torch.stack(outputs)  # Shape: [num_heads, batch_size, num_classes]
-        # Average the outputs over heads
-        x = outputs.mean(dim=0)  # Shape: [batch_size, num_classes]
-        return x
-
-
-class BatchEnsembleMLP(nn.Module):
-    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
-        super(BatchEnsembleMLP, self).__init__()
-        self.num_classes = num_classes
-        self.ensemble_size = ensemble_size
-        self.fc1 = BELinear(
-            input_size,
-            hidden_size,
-            ensemble_size=ensemble_size,
-            alpha_init=alpha_init,
-            gamma_init=gamma_init,
-        )
-        self.relu = nn.ReLU()
-        self.fc2 = BELinear(
-            hidden_size,
-            hidden_size,
-            ensemble_size=ensemble_size,
-            alpha_init=alpha_init,
-            gamma_init=gamma_init,
-        )
-        self.relu2 = nn.ReLU()
-        self.fc3 = BELinear(
-            hidden_size,
-            num_classes,
-            ensemble_size=ensemble_size,
-            alpha_init=alpha_init,
-            gamma_init=gamma_init,
-        )
-
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        x = self.relu(self.fc1(x))
-        x = self.relu2(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
-class SharedParametersBatchEnsembleMLP(nn.Module):
-    def __init__(self, input_size=32 * 32 * 3, hidden_size=256, num_classes=10, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
-        super(SharedParametersBatchEnsembleMLP, self).__init__()
-        self.num_classes = num_classes
-        self.ensemble_size = ensemble_size
-        self.relu = nn.ReLU()
-        self.relu2 = nn.ReLU()
-
-        # Shared BatchEnsemble layers
-        self.fc1 = BELinear(
-            input_size,
-            hidden_size,
-            ensemble_size=ensemble_size,
-            alpha_init=alpha_init,
-            gamma_init=gamma_init,
-        )
-        self.fc2 = BELinear(
-            hidden_size,
-            hidden_size,
-            ensemble_size=ensemble_size,
-            alpha_init=alpha_init,
-            gamma_init=gamma_init,
-        )
-
-        # Multiple heads for classification
-        self.heads = nn.ModuleList([
-            nn.Linear(hidden_size, num_classes) for _ in range(ensemble_size)
-        ])
-
-    def forward(self, x):
-        x = x.view(x.size(0), -1)  # Flatten
-
-        # Pass through shared BatchEnsemble layers
-        x = self.relu(self.fc1(x))
-        x = self.relu2(self.fc2(x))
-
-        # Reshape x to [ensemble_size, batch_size, hidden_size]
-        batch_size = x.size(0) // self.ensemble_size
-        x = x.view(self.ensemble_size, batch_size, -1)
-
-        # Apply each head and collect outputs
-        outputs = []
-        for i, head in enumerate(self.heads):
-            out = head(x[i])  # x[i] is [batch_size, hidden_size]
-            outputs.append(out)
-
-        # Stack outputs: Shape [ensemble_size, batch_size, num_classes]
-        outputs = torch.stack(outputs)  # Shape: [ensemble_size, batch_size, num_classes]
-
-        # Average over ensemble members
-        outputs = outputs.mean(dim=0)  # Shape: [batch_size, num_classes]
-
-        return outputs
-
-
 # CNN Models
-
-class ComplexCNN(nn.Module):
+class SimpleCNN(nn.Module):
     def __init__(self):
-        super(ComplexCNN, self).__init__()
+        super(SimpleCNN, self).__init__()
         self.num_classes = 10
-
-        # Define the VGG11 feature extractor
-        self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1)
-        self.bn1 = BatchNorm2d(64)
-        self.conv2 = Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn2 = BatchNorm2d(128)
-
-        self.conv3 = Conv2d(128, 256, kernel_size=3, padding=1)
-        self.bn3 = BatchNorm2d(256)
-        self.conv4 = Conv2d(256, 256, kernel_size=3, padding=1)
-        self.bn4 = BatchNorm2d(256)
-
-        self.conv5 = Conv2d(256, 512, kernel_size=3, padding=1)
-        self.bn5 = BatchNorm2d(512)
-        self.conv6 = Conv2d(512, 512, kernel_size=3, padding=1)
-        self.bn6 = BatchNorm2d(512)
-
-        self.conv7 = Conv2d(512, 512, kernel_size=3, padding=1)
-        self.bn7 = BatchNorm2d(512)
-        self.conv8 = Conv2d(512, 512, kernel_size=3, padding=1)
-        self.bn8 = BatchNorm2d(512)
-
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)  # Changed input channels to 3
+        self.bn1 = nn.BatchNorm2d(32)
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool2d(2)
-
-        # Define the classifier
-        self.fc1 = BELinear(512, 4096)  # Adjusted for CIFAR-10 input size
-        self.fc2 = BELinear(4096, 4096)
-        self.fc3 = BELinear(4096, 10)
-
-        self.dropout = nn.Dropout()
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.fc = nn.Linear(64 * 8 * 8, 10)  # Adjusted input size
 
     def forward(self, x):
-        # Convolutional layers
-        x = self.relu(self.bn1(self.conv1(x)))  # [batch_size, 64, 32, 32]
-        x = self.pool(x)  # [batch_size, 64, 16, 16]
-
-        x = self.relu(self.bn2(self.conv2(x)))  # [batch_size, 128, 16, 16]
-        x = self.pool(x)  # [batch_size, 128, 8, 8]
-
-        x = self.relu(self.bn3(self.conv3(x)))  # [batch_size, 256, 8, 8]
-        x = self.relu(self.bn4(self.conv4(x)))  # [batch_size, 256, 8, 8]
-        x = self.pool(x)  # [batch_size, 256, 4, 4]
-
-        x = self.relu(self.bn5(self.conv5(x)))  # [batch_size, 512, 4, 4]
-        x = self.relu(self.bn6(self.conv6(x)))  # [batch_size, 512, 4, 4]
-        x = self.pool(x)  # [batch_size, 512, 2, 2]
-
-        x = self.relu(self.bn7(self.conv7(x)))  # [batch_size, 512, 2, 2]
-        x = self.relu(self.bn8(self.conv8(x)))  # [batch_size, 512, 2, 2]
-        x = self.pool(x)  # [batch_size, 512, 1, 1]
-
-        # Flatten
-        x = x.view(x.size(0), -1)  # [batch_size, 512*2*2]
-
-        # Fully connected layers
-        x = self.dropout(self.relu(self.fc1(x)))  # [batch_size, 4096]
-        x = self.dropout(self.relu(self.fc2(x)))  # [batch_size, 4096]
-        x = self.fc3(x)  # [batch_size, 10]
+        x = self.relu(self.bn1(self.conv1(x)))  # [batch_size, 32, 32, 32]
+        x = self.pool(x)  # [batch_size, 32, 16, 16]
+        x = self.relu(self.bn2(self.conv2(x)))  # [batch_size, 64, 16, 16]
+        x = self.pool(x)  # [batch_size, 64, 8, 8]
+        x = x.view(x.size(0), -1)  # [batch_size, 64*8*8]
+        x = self.fc(x)  # [batch_size, 10]
         return x
 
 
@@ -480,58 +298,30 @@ class BatchEnsembleCNN(nn.Module):
         super(BatchEnsembleCNN, self).__init__()
         self.num_classes = 10
         self.ensemble_size = ensemble_size
-        # Convolutional layers
-        self.conv1 = Conv2d(3, 64, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
+        self.conv1 = Conv2d(3, 32, kernel_size=3, padding=1,  # Changed input channels to 3
+                            ensemble_size=ensemble_size,
+                            alpha_init=alpha_init,
                             gamma_init=gamma_init)
-        self.bn1 = BatchNorm2d(64, ensemble_size=ensemble_size)
-
-        self.conv2 = Conv2d(64, 128, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-        self.bn2 = BatchNorm2d(128, ensemble_size=ensemble_size)
-
-        self.conv3 = Conv2d(128, 256, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
-        self.bn3 = BatchNorm2d(256, ensemble_size=ensemble_size)
-
-        self.conv4 = Conv2d(256, 256, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
-        self.bn4 = BatchNorm2d(256, ensemble_size=ensemble_size)
-
-        self.conv5 = Conv2d(256, 512, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-        self.bn5 = BatchNorm2d(512, ensemble_size=ensemble_size)
-
-        self.conv6 = Conv2d(512, 512, kernel_size=3, padding=1, ensemble_size=ensemble_size, alpha_init=alpha_init,
-                            gamma_init=gamma_init)
-        self.bn6 = BatchNorm2d(512, ensemble_size=ensemble_size)
-
-        self.global_pool = nn.AdaptiveAvgPool2d(1)
-
-        # Fully connected layers
-        self.fc1 = BELinear(512, 1024, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
-        self.bn_fc1 = nn.BatchNorm1d(1024)
-        self.fc2 = BELinear(1024, 10, ensemble_size=ensemble_size, alpha_init=alpha_init, gamma_init=gamma_init)
-
+        self.bn1 = BatchNorm2d(32, ensemble_size=ensemble_size)
         self.relu = nn.ReLU()
         self.pool = nn.MaxPool2d(2)
-        self.dropout = nn.Dropout(p=0.5)
+        self.conv2 = Conv2d(32, 64, kernel_size=3, padding=1,
+                            ensemble_size=ensemble_size,
+                            alpha_init=alpha_init,
+                            gamma_init=gamma_init)
+        self.bn2 = BatchNorm2d(64, ensemble_size=ensemble_size)
+        self.fc = BELinear(64 * 8 * 8, 10,  # Adjusted input size
+                           ensemble_size=ensemble_size,
+                           alpha_init=alpha_init,
+                           gamma_init=gamma_init)
 
     def forward(self, x):
-        x = self.relu(self.bn1(self.conv1(x)))
-        x = self.pool(x)
-
-        x = self.relu(self.bn2(self.conv2(x)))
-        x = self.pool(x)
-
-        x = self.relu(self.bn3(self.conv3(x)))
-        x = self.relu(self.bn4(self.conv4(x)))
-        x = self.pool(x)
-
-        x = self.relu(self.bn5(self.conv5(x)))
-        x = self.relu(self.bn6(self.conv6(x)))
-        x = self.global_pool(x)
-
-        x = x.view(x.size(0), -1)
-        x = self.dropout(self.relu(self.bn_fc1(self.fc1(x))))
-        x = self.fc2(x)
+        x = self.relu(self.bn1(self.conv1(x)))  # [batch_size * ensemble_size, 32, 32, 32]
+        x = self.pool(x)  # [batch_size * ensemble_size, 32, 16, 16]
+        x = self.relu(self.bn2(self.conv2(x)))  # [batch_size * ensemble_size, 64, 16, 16]
+        x = self.pool(x)  # [batch_size * ensemble_size, 64, 8, 8]
+        x = x.view(x.size(0), -1)  # [batch_size * ensemble_size, 64*8*8]
+        x = self.fc(x)  # [batch_size * ensemble_size, 10]
         return x
 
 
@@ -602,21 +392,179 @@ class SharedParametersBatchEnsembleCNN(nn.Module):
         return outputs
 
 
+class ComplexCNN(nn.Module):
+    def __init__(self, num_classes=10):
+        super(ComplexCNN, self).__init__()
+        self.features = nn.Sequential(
+            # Conv1
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),  # 32x32x3 -> 32x32x64
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 32x32x64 -> 16x16x64
+
+            # Conv2
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),  # 16x16x64 -> 16x16x128
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 16x16x128 -> 8x8x128
+
+            # Conv3
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),  # 8x8x128 -> 8x8x256
+            nn.ReLU(inplace=True),
+
+            # Conv4
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),  # 8x8x256 -> 8x8x256
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 8x8x256 -> 4x4x256
+
+            # Conv5
+            nn.Conv2d(256, 512, kernel_size=3, padding=1),  # 4x4x256 -> 4x4x512
+            nn.ReLU(inplace=True),
+
+            # Conv6
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),  # 4x4x512 -> 4x4x512
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 4x4x512 -> 2x2x512
+
+            # Conv7
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),  # 2x2x512 -> 2x2x512
+            nn.ReLU(inplace=True),
+
+            # Conv8
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),  # 2x2x512 -> 2x2x512
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 2x2x512 -> 1x1x512
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 1 * 1, 512),
+            nn.ReLU(inplace=True),
+            nn.Linear(512, num_classes),
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)  # Flatten
+        x = self.classifier(x)
+        return x
+
+
+class BatchEnsembleComplexCNN(nn.Module):
+    def __init__(self, num_classes=10, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
+        super(BatchEnsembleComplexCNN, self).__init__()
+        self.num_classes = num_classes
+        self.ensemble_size = ensemble_size
+
+        # Define BatchEnsemble convolutional layers
+        self.features = nn.Sequential(
+            # Conv1
+            Conv2d(3, 64, kernel_size=3, padding=1,  # Input: 32x32x3 -> Output: 32x32x64
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(64, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # Output: 16x16x64
+
+            # Conv2
+            Conv2d(64, 128, kernel_size=3, padding=1,  # Output: 16x16x128
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(128, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # Output: 8x8x128
+
+            # Conv3
+            Conv2d(128, 256, kernel_size=3, padding=1,  # Output: 8x8x256
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(256, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+
+            # Conv4
+            Conv2d(256, 256, kernel_size=3, padding=1,  # Output: 8x8x256
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(256, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # Output: 4x4x256
+
+            # Conv5
+            Conv2d(256, 512, kernel_size=3, padding=1,  # Output: 4x4x512
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(512, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+
+            # Conv6
+            Conv2d(512, 512, kernel_size=3, padding=1,  # Output: 4x4x512
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(512, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # Output: 2x2x512
+
+            # Conv7
+            Conv2d(512, 512, kernel_size=3, padding=1,  # Output: 2x2x512
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(512, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+
+            # Conv8
+            Conv2d(512, 512, kernel_size=3, padding=1,  # Output: 2x2x512
+                   ensemble_size=ensemble_size,
+                   alpha_init=alpha_init,
+                   gamma_init=gamma_init),
+            BatchNorm2d(512, ensemble_size=ensemble_size),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # Output: 1x1x512
+        )
+
+        # Define BatchEnsemble classifier
+        self.classifier = nn.Sequential(
+            BELinear(512 * 1 * 1, 512,
+                     ensemble_size=ensemble_size,
+                     alpha_init=alpha_init,
+                     gamma_init=gamma_init),
+            nn.ReLU(inplace=True),
+            BELinear(512, num_classes,
+                     ensemble_size=ensemble_size,
+                     alpha_init=alpha_init,
+                     gamma_init=gamma_init)
+        )
+
+    def forward(self, x):
+        # Forward pass through convolutional layers
+        x = self.features(x)  # Shape: [batch_size * ensemble_size, 1, 1, 512]
+
+        # Flatten
+        x = x.view(x.size(0), -1)  # Shape: [batch_size * ensemble_size, 512]
+
+        # Forward pass through classifier
+        x = self.classifier(x)  # Shape: [batch_size * ensemble_size, num_classes]
+
+        return x
+
+
 # Training and visualization functions
 
-def train_cifar_model(
+def train_mnist_model(
         model,
         train_loader,
         test_loader,
-        model_type="batchensemble",
+        model_type="simple",
         ensemble_size=4,
         num_epochs=15,
-        lr=0.0001,
+        lr=0.0002,
         device=torch.device("cpu"),
 ):
     model.to(device)  # Move the model to the GPU if available
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     train_losses = []
     test_accuracies = []
     for epoch in range(num_epochs):
@@ -626,7 +574,7 @@ def train_cifar_model(
             images = images.to(device)
             labels = labels.to(device)
             optimizer.zero_grad()
-            if model_type == "batchensemble":
+            if model_type == "batchensemble" or model_type == "batchensemble_complex":
                 # Repeat images and labels for BatchEnsemble
                 images = images.repeat(ensemble_size, 1, 1, 1)
                 labels = labels.repeat(ensemble_size)
@@ -634,7 +582,13 @@ def train_cifar_model(
                 # Repeat images only
                 images = images.repeat(ensemble_size, 1, 1, 1)
                 # Do not repeat labels
+            # For other model types (including "complex"), no repetition is needed
             outputs = model(images)
+            if model_type == "shared_batchensemble":
+                # Reshape outputs to [ensemble_size, batch_size, num_classes]
+                outputs = outputs.view(ensemble_size, -1, model.num_classes)
+                # Average the outputs over ensemble members
+                outputs = outputs.mean(dim=0)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -649,26 +603,17 @@ def train_cifar_model(
             for images, labels in test_loader:
                 images = images.to(device)
                 labels = labels.to(device)
-                if model_type == "batchensemble":
-                    # Repeat images for ensemble
+                if model_type == "batchensemble" or model_type == "batchensemble_complex":
                     images = images.repeat(ensemble_size, 1, 1, 1)
-
-                    # Forward pass through the model
-                    outputs = model(images)  # Shape: [batch_size * ensemble_size, num_classes]
-                    # print("1: ", outputs.shape)  # Debugging: should be [batch_size * ensemble_size, num_classes]
-
-                    # Reshape and average over the ensemble
-                    batch_size = outputs.size(0) // ensemble_size
-                    outputs = outputs.view(batch_size, ensemble_size,
-                                           -1)  # Shape: [batch_size, ensemble_size, num_classes]
-                    # print("2: ", outputs.shape)  # Debugging: should be [batch_size, ensemble_size, num_classes]
-                    outputs = outputs.mean(dim=1)  # Shape: [batch_size, num_classes]
+                    outputs = model(images)
+                    # Reshape and average over ensemble instances
+                    outputs = outputs.view(ensemble_size, -1, model.num_classes)
+                    outputs = outputs.mean(dim=0)
                 elif model_type == "shared_batchensemble":
                     images = images.repeat(ensemble_size, 1, 1, 1)
                     outputs = model(images)
                 else:
                     outputs = model(images)
-                # print("3: ", outputs.shape)
                 _, predicted = torch.max(outputs.data, 1)
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
@@ -680,152 +625,19 @@ def train_cifar_model(
     return train_losses, test_accuracies
 
 
-# def plot_training_results(train_losses, test_accuracies, ax, model_type="simple"):
-#     ax.plot(train_losses, label="Train loss")
-#     ax.set_xlabel("Epoch")
-#     ax.set_ylabel("Loss")
-#     ax.set_title(f"{model_type.replace('_', ' ').capitalize()} Training Loss")
-#     ax.legend()
-
-#     ax2 = ax.twinx()
-#     ax2.plot(test_accuracies, label="Test Accuracy", color="orange")
-#     ax2.set_ylabel("Accuracy (%)")
-#     ax2.legend(loc='lower right')
-
-# @torch.no_grad()
-# def plot_parameters(model, model_name="Model", plot_type="kde", ax=None):
-#     """
-#     Plots the distribution of model parameters using different plot types.
-
-#     Parameters:
-#     - model (nn.Module): The PyTorch model whose parameters are to be plotted.
-#     - model_name (str): A name for the model to be displayed in the plot titles.
-#     - plot_type (str): The type of plot to generate. Options are:
-#         - 'kde': Kernel Density Estimate plot.
-#         - 'histogram': Combined histogram for all parameter types.
-#         - 'facet_hist': FacetGrid of histograms separated by parameter type.
-#     - ax (matplotlib.axes.Axes, optional): The axes on which to plot. Required for 'kde' and 'histogram' types.
-#                                            Not used for 'facet_hist' as it creates its own figure.
-#     """
-#     # Collect all parameters and categorize them by type
-#     params = []
-#     tags = []
-# for name, param in model.named_parameters():
-#     if "bias" in name:
-#         tag = "bias"
-#     elif "alpha" in name:
-#         tag = "alpha"
-#     elif "gamma" in name:
-#         tag = "gamma"
-#     elif "weight" in name:
-#         tag = "weight"
-#     else:
-#         tag = "other"
-#     params.append(param.detach().cpu().flatten())
-#     tags += [tag] * param.numel()
-
-# # Concatenate all parameters into a single array
-# params = torch.cat(params).numpy()
-# tags = np.array(tags)
-
-# # Create a DataFrame for seaborn
-# df = pd.DataFrame({
-#     'Parameter Value': params,
-#     'Type': tags
-# })
-
-# # Compute statistics
-# mean = np.mean(params)
-# std = np.std(params)
-# median = np.median(params)
-
-# # Plot based on the specified plot type
-# if plot_type == "kde":
-#     if ax is None:
-#         fig, ax = plt.subplots(figsize=(8, 6))
-#     sns.kdeplot(
-#         data=df,
-#         x='Parameter Value',
-#         hue='Type',
-#         ax=ax,
-#         fill=True,
-#         common_norm=False,  # Normalize each KDE separately
-#         alpha=0.5
-#     )
-#     ax.set_xlabel("Parameter Value")
-#     ax.set_ylabel("Density")
-#     ax.set_title(f"Parameter Distribution (KDE) of {model_name}")
-#     # Display statistics
-#     ax.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
-#             transform=ax.transAxes, fontsize=10,
-#             verticalalignment='top', horizontalalignment='right',
-#             bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
-
-# elif plot_type == "histogram":
-#     if ax is None:
-#         fig, ax = plt.subplots(figsize=(8, 6))
-#     sns.histplot(
-#         data=df,
-#         x='Parameter Value',
-#         hue='Type',
-#         multiple='stack',
-#         bins=50,
-#         kde=False,
-#         ax=ax
-#     )
-#     ax.set_xlabel("Parameter Value")
-#     ax.set_ylabel("Count")
-#     ax.set_title(f"Parameter Distribution (Histogram) of {model_name}")
-#     # Display statistics
-#     ax.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
-#             transform=ax.transAxes, fontsize=10,
-#             verticalalignment='top', horizontalalignment='right',
-#             bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
-
-# elif plot_type == "facet_hist":
-#     # Create a FacetGrid of histograms separated by parameter type
-#     g = sns.FacetGrid(df, col="Type", col_wrap=2, sharex=False, sharey=False, height=4)
-#     g.map_dataframe(sns.histplot, x="Parameter Value", bins=50, kde=False, color="steelblue")
-#     g.set_axis_labels("Parameter Value", "Count")
-#     g.fig.suptitle(f"Parameter Distribution (FacetGrid Histogram) of {model_name}", y=1.02)
-#     # Adjust layout
-#     plt.tight_layout()
-#     # Display statistics on the first subplot
-#     if len(g.axes.flat) > 0:
-#         ax0 = g.axes.flat[0]
-#         ax0.text(0.95, 0.95, f"Mean: {mean:.2e}\nStd: {std:.2e}\nMedian: {median:.2e}",
-#                  transform=ax0.transAxes, fontsize=10,
-#                  verticalalignment='top', horizontalalignment='right',
-#                  bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
-# else:
-#     raise ValueError("Invalid plot_type. Choose from 'kde', 'histogram', or 'facet_hist'.")
-
 # Main function
-
-def main():
-    # Set random seed for reproducibility
-    seed = 42
+def train_with_params(
+        seed: int = typer.Option(42, help="Size of the seed"),
+        ensemble_size: int = typer.Option(4, help="Size of the ensemble"),
+        alpha_init: float = typer.Option(0.5, help="Initial value for Alpha in BatchEnsemble"),
+        gamma_init: float = typer.Option(0.5, help="Initial value for Gamma in BatchEnsemble"),
+        num_epochs: int = typer.Option(15, help="Number of training epochs"),
+        batch_size: int = typer.Option(256, help="Batch size for training"),
+        lr: float = typer.Option(0.0002, help="Learning rate for the optimizer"),
+        device: str = typer.Option("cpu", help="Device to use, 'cuda' for GPU or 'cpu' for CPU")
+):
     torch.manual_seed(seed)
-
-    # Hyperparameters
-    ###############HERE TESTEN
-    # ensemble_size = 4, 8, 16
-    ensemble_size = 4
     num_heads = ensemble_size  # For consistency
-    # alpha_init = 0.1, 0.5, 1.0
-    alpha_init = -0.1
-    # gamma_init = 0.1, 0.5, 1.0
-    gamma_init = -0.1
-    num_epochs = 15
-    # batch_size = 32, 64, 128
-    batch_size = 64
-    # lr = 0.001, 0.0005, 0.01
-    # old 0.0002
-    lr = 0.0002
-
-    # Define device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
 
     # Ensure that batch_size is divisible by ensemble_size
     if batch_size % ensemble_size != 0:
@@ -859,110 +671,28 @@ def main():
         shuffle=False
     )
 
-    # Define model types
-    model_types = ["batchensemble"]  # "simple", "sharedparameters", "shared_batchensemble"]
-
-    # Initialize dictionaries to store models and their metrics
-    mlp_models = {}
-    mlp_train_losses = {}
-    mlp_test_accuracies = {}
-
-    # Train and evaluate MLP models
-    """
-    
-    for model_type in model_types:
-        if model_type == "simple":
-            model = MLP().to(device)
-            ensemble_size_mlp = 1
-        elif model_type == "batchensemble":
-            model = BatchEnsembleMLP(
-                ensemble_size=ensemble_size,
-                alpha_init=alpha_init,
-                gamma_init=gamma_init
-            ).to(device)
-            ensemble_size_mlp = ensemble_size
-        elif model_type == "sharedparameters":
-            model = SharedParametersMLP(
-                num_heads=num_heads
-            ).to(device)
-            ensemble_size_mlp = 1  # Shared parameters handle multiple heads internally
-        elif model_type == "shared_batchensemble":
-            model = SharedParametersBatchEnsembleMLP(
-                ensemble_size=ensemble_size,
-                alpha_init=alpha_init,
-                gamma_init=gamma_init
-            ).to(device)
-            ensemble_size_mlp = ensemble_size
-        else:
-            raise ValueError("Invalid model_type.")
-        mlp_models[model_type] = model
-        print(f"Training MLP model: {model_type}")
-        tr_losses, te_accuracies = train_cifar_model(
-            model,
-            train_loader,
-            test_loader,
-            model_type=model_type,
-            ensemble_size=ensemble_size_mlp,
-            num_epochs=num_epochs,
-            lr=lr,
-            device=device,  # Ensure device is passed
-        )
-        mlp_train_losses[model_type] = tr_losses
-        mlp_test_accuracies[model_type] = te_accuracies
-
-    """
-
-    # # Plot MLP training results and parameter distributions
-    # # Define plot types
-    # plot_types = ["kde", "histogram"]  # Add "facet_hist" if desired
-
-    # # Create a figure with subplots for training results and parameter plots
-    # num_models = len(model_types)
-    # num_plot_types = len(plot_types)
-    # fig, axs = plt.subplots(num_plot_types + 1, num_models, figsize=(24, 18))  # +1 for training plots
-
-    # for i, model_type in enumerate(model_types):
-    #     # Plot training loss and test accuracy on the first row
-    #     plot_training_results(
-    #         mlp_train_losses[model_type],
-    #         mlp_test_accuracies[model_type],
-    #         axs[0, i],
-    #         model_type=model_type
-    #     )
-    #     # Plot parameter distributions for each plot type
-    #     for j, plot_type in enumerate(plot_types):
-    #         plot_parameters(
-    #             mlp_models[model_type],
-    #             model_name=f"{model_type.replace('_', ' ').capitalize()} MLP",
-    #             plot_type=plot_type,
-    #             ax=axs[j + 1, i]
-    #         )
-    #         # Optional: Remove any additional plot types by commenting them out
-
-    # # Adjust layout and add a main title
-    # plt.tight_layout()
-    # fig.suptitle("MLP Models: Training and Parameter Distributions", fontsize=16, y=1.02)
-    # plt.show()
-
-    # # Optional: Create separate FacetGrid histograms for each MLP model
-    # for model_type in model_types:
-    #     plot_parameters(
-    #         mlp_models[model_type],
-    #         model_name=f"{model_type.replace('_', ' ').capitalize()} MLP",
-    #         plot_type="facet_hist"
-    #     )
-    #     plt.show()
-    #     # Optional: Comment out the plt.show() if you do not want to display each plot immediately
+    # Define model types, including 'complex' and 'batchensemble_complex'
+    model_types = [
+        # "simple",
+        # "batchensemble",
+        # "sharedparameters",
+        # "shared_batchensemble",
+        # "complex",
+        "batchensemble_complex"
+    ]
 
     # Initialize dictionaries to store CNN models and their metrics
     cnn_models = {}
     cnn_train_losses = {}
     cnn_test_accuracies = {}
 
+    # for the differences
+    results = []
+
     # Train and evaluate CNN models
     for model_type in model_types:
         if model_type == "simple":
-            model = ComplexCNN().to(device)
+            model = SimpleCNN().to(device)
             ensemble_size_cnn = 1
         elif model_type == "batchensemble":
             model = BatchEnsembleCNN(
@@ -983,11 +713,22 @@ def main():
                 gamma_init=gamma_init
             ).to(device)
             ensemble_size_cnn = ensemble_size
+        elif model_type == "complex":
+            model = ComplexCNN().to(device)
+            ensemble_size_cnn = 1  # No ensemble in this model
+        elif model_type == "batchensemble_complex":
+            model = BatchEnsembleComplexCNN(
+                ensemble_size=ensemble_size,
+                alpha_init=alpha_init,
+                gamma_init=gamma_init
+            ).to(device)
+            ensemble_size_cnn = ensemble_size
         else:
             raise ValueError("Invalid model_type.")
+
         cnn_models[model_type] = model
         print(f"Training CNN model: {model_type}")
-        tr_losses, te_accuracies = train_cifar_model(
+        tr_losses, te_accuracies = train_mnist_model(
             model,
             train_loader,
             test_loader,
@@ -997,56 +738,83 @@ def main():
             lr=lr,
             device=device,  # Ensure device is passed
         )
+
         cnn_train_losses[model_type] = tr_losses
         cnn_test_accuracies[model_type] = te_accuracies
 
-    # # In CSV speichern
-    # with open('DeepLearning/zahlen.csv', 'w', newline='') as file:
-    #     writer = csv.writer(file)
-    #     writer.writerow(zahlen)
+        result = {
+            "seed": seed,
+            "alpha_init": alpha_init,
+            "gamma_init": gamma_init,
+            "ensemble_size": ensemble_size,
+            "num_epochs": num_epochs,
+            "batch_size": batch_size,
+            "lr": lr,
+            "model_type": model_type,
+            "final_test_accuracy": te_accuracies[-1],
+            "avg_test_accuracy": sum(te_accuracies) / len(te_accuracies)
+        }
+        results.append(result)
 
-    # # Plot CNN training results and parameter distributions
-    # # Define plot types
-    # plot_types = ["kde", "histogram"]  # Add "facet_hist" if desired
-
-    # # Create a figure with subplots for training results and parameter plots
-    # num_models = len(model_types)
-    # num_plot_types = len(plot_types)
-    # fig, axs = plt.subplots(num_plot_types + 1, num_models, figsize=(24, 18))  # +1 for training plots
-
-    # for i, model_type in enumerate(model_types):
-    #     # Plot training loss and test accuracy on the first row
-    #     plot_training_results(
-    #         cnn_train_losses[model_type],
-    #         cnn_test_accuracies[model_type],
-    #         axs[0, i],
-    #         model_type=model_type
-    #     )
-    #     # Plot parameter distributions for each plot type
-    #     for j, plot_type in enumerate(plot_types):
-    #         plot_parameters(
-    #             cnn_models[model_type],
-    #             model_name=f"{model_type.replace('_', ' ').capitalize()} CNN",
-    #             plot_type=plot_type,
-    #             ax=axs[j + 1, i]
-    #         )
-    #         # Optional: Remove any additional plot types by commenting them out
-
-    # # Adjust layout and add a main title
-    # plt.tight_layout()
-    # fig.suptitle("CNN Models: Training and Parameter Distributions", fontsize=16, y=1.02)
-    # plt.show()
-
-    # # Optional: Create separate FacetGrid histograms for each CNN model
-    # for model_type in model_types:
-    #     plot_parameters(
-    #         cnn_models[model_type],
-    #         model_name=f"{model_type.replace('_', ' ').capitalize()} CNN",
-    #         plot_type="facet_hist"
-    #     )
-    #     plt.show()
-    #     # Optional: Comment out the plt.show() if you do not want to display each plot immediately
+    return results
 
 
-if __name__ == "__main__":
-    main()
+def save_results_to_csv(results, file_path):
+    """Saves results to a CSV file without overwriting existing data."""
+    # Convert results to DataFrame
+    df = pd.DataFrame(results)
+
+    # Check if file exists
+    file_exists = os.path.isfile(file_path)
+
+    # Append data to the file
+    df.to_csv(file_path, mode='a', header=not file_exists, index=False)
+
+    if file_exists:
+        print(f"Appended results to {file_path}")
+    else:
+        print(f"Created new results file: {file_path}")
+
+
+app = typer.Typer()
+
+
+@app.command()
+def run_experiments():
+    """Defines a CLI to test multiple parameter combinations."""
+    alpha_list = [-0.1, 0.5, 1]
+    gamma_list = [-0.1, 0.5, 1]
+    ensemble_size_list = [2, 5, 10]
+    seed_list = [42]
+    epochs_list = [15]
+    batch_list = [256]
+    lr_list = [0.0002]
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    output_folder = "data"
+    os.makedirs(output_folder, exist_ok=True)
+
+    alpha_gamma_file = os.path.join(output_folder, "alpha_gamma_results.csv")
+    ensemble_size_file = os.path.join(output_folder, "ensemble_size_results.csv")
+
+    """
+    # test different alpha and gamma values
+    for alpha in alpha_list:
+        for gamma in gamma_list:
+            print(f"Next calculation with differences in alpha and gamma: alpha={alpha} and gamma={gamma}")
+            results = train_with_params(seed=42, ensemble_size=4, alpha_init=alpha, gamma_init=gamma, num_epochs=15, batch_size=256, lr=0.0002, device=device)
+            save_results_to_csv(results, alpha_gamma_file)
+    """
+
+    # test ensemble size
+    for ensemble_size in ensemble_size_list:
+        print(f"Next calculation with differences in ensemble size: ensemble size = {ensemble_size}")
+        results = train_with_params(seed=42, ensemble_size=ensemble_size, alpha_init=0.5, gamma_init=0.5, num_epochs=15,
+                                    batch_size=ensemble_size, lr=0.0002, device=device)
+        save_results_to_csv(results, ensemble_size_file)
+
+
+sys.argv = ["Complex_Test.py"]
+typer.run(run_experiments)

@@ -1,0 +1,10 @@
+seed,alpha_init,gamma_init,ensemble_size,num_epochs,batch_size,lr,model_type,final_test_accuracy,avg_test_accuracy
+42,-0.1,-0.1,4,15,256,0.0002,batchensemble_complex,78.58,75.5
+42,-0.1,0.5,4,15,256,0.0002,batchensemble_complex,81.83,76.33733333333333
+42,-0.1,1,4,15,256,0.0002,batchensemble_complex,79.68,74.45733333333332
+42,0.5,-0.1,4,15,256,0.0002,batchensemble_complex,81.54,76.43133333333334
+42,0.5,0.5,4,15,256,0.0002,batchensemble_complex,79.96,75.07066666666667
+42,0.5,1,4,15,256,0.0002,batchensemble_complex,81.69,75.72066666666666
+42,1,-0.1,4,15,256,0.0002,batchensemble_complex,78.26,74.9
+42,1,0.5,4,15,256,0.0002,batchensemble_complex,81.26,74.90533333333333
+42,1,1,4,15,256,0.0002,batchensemble_complex,77.02,74.78466666666667
