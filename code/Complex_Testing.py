@@ -816,5 +816,5 @@ def run_experiments():
         save_results_to_csv(results, ensemble_size_file)
 
 
-sys.argv = ["Complex_Test.py"]
+sys.argv = ["Complex_Testing.py"]
 typer.run(run_experiments)

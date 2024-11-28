@@ -1,0 +1,4 @@
+seed,alpha_init,gamma_init,ensemble_size,num_epochs,batch_size,lr,model_type,final_test_accuracy,avg_test_accuracy
+42,0.5,0.5,2,15,2,0.0002,batchensemble_complex,78.36,71.83133333333333
+42,0.5,0.5,5,15,5,0.0002,batchensemble_complex,84.49,77.97
+42,0.5,0.5,10,15,10,0.0002,batchensemble_complex,84.46,79.42133333333332
