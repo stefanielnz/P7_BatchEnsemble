@@ -1,13 +1,11 @@
-import sys
 import typer
 # Import necessary libraries
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import datasets, transforms
-import pandas as pd
 import os
-
+import csv
 
 # BatchEnsemble implementation
 
@@ -752,7 +750,9 @@ def train_with_params(
             "lr": lr,
             "model_type": model_type,
             "final_test_accuracy": te_accuracies[-1],
-            "avg_test_accuracy": sum(te_accuracies) / len(te_accuracies)
+            "avg_test_accuracy": sum(te_accuracies) / len(te_accuracies),
+            "final_losses": tr_losses[-1],
+            "avg_losses": sum(tr_losses) / len(tr_losses)
         }
         results.append(result)
 
@@ -760,15 +760,23 @@ def train_with_params(
 
 
 def save_results_to_csv(results, file_path):
-    """Saves results to a CSV file without overwriting existing data."""
-    # Convert results to DataFrame
-    df = pd.DataFrame(results)
-
     # Check if file exists
     file_exists = os.path.isfile(file_path)
 
-    # Append data to the file
-    df.to_csv(file_path, mode='a', header=not file_exists, index=False)
+    # Get the headers from the first dictionary in results
+    headers = results[0].keys() if results else []
+
+    # Open the file in append mode
+    with open(file_path, mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=headers)
+
+        # Write the header only if the file does not exist
+        if not file_exists:
+            writer.writeheader()
+
+        # Write each result as a row
+        for result in results:
+            writer.writerow(result)
 
     if file_exists:
         print(f"Appended results to {file_path}")
@@ -782,13 +790,10 @@ app = typer.Typer()
 @app.command()
 def run_experiments():
     """Defines a CLI to test multiple parameter combinations."""
-    alpha_list = [-0.1, 0.5, 1]
-    gamma_list = [-0.1, 0.5, 1]
-    ensemble_size_list = [2, 5, 10]
-    seed_list = [42]
-    epochs_list = [15]
-    batch_list = [256]
-    lr_list = [0.0002]
+    alpha_list = [-1, -0.8, -0.5, -0.2, 0, 0.2, 0.5, 0.8, 1]
+    gamma_list =  [-1, -0.8, -0.5, -0.2, 0, 0.2, 0.5, 0.8, 1]
+    ensemble_size_list = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+    lr_list = [0.02, 0.002, 0.0002]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -796,25 +801,26 @@ def run_experiments():
     output_folder = "data"
     os.makedirs(output_folder, exist_ok=True)
 
-    alpha_gamma_file = os.path.join(output_folder, "alpha_gamma_results.csv")
-    ensemble_size_file = os.path.join(output_folder, "ensemble_size_results.csv")
+    alpha_gamma_file = os.path.join(output_folder, "alpha_gamma_results-loss.csv")
+    ensemble_size_file = os.path.join(output_folder, "ensemble_size_results-loss.csv")
 
-    """
+
     # test different alpha and gamma values
     for alpha in alpha_list:
         for gamma in gamma_list:
             print(f"Next calculation with differences in alpha and gamma: alpha={alpha} and gamma={gamma}")
             results = train_with_params(seed=42, ensemble_size=4, alpha_init=alpha, gamma_init=gamma, num_epochs=15, batch_size=256, lr=0.0002, device=device)
             save_results_to_csv(results, alpha_gamma_file)
+
+    """
+    # test ensemble size
+    for lr in lr_list:
+        for ensemble_size in ensemble_size_list:
+            print(f"Next calculation with differences in ensemble size: ensemble size = {ensemble_size}")
+            results = train_with_params(seed=42, ensemble_size=ensemble_size, alpha_init=0.5, gamma_init=0.5, num_epochs=15,
+                                    batch_size=ensemble_size, lr=lr, device=device)
+            save_results_to_csv(results, ensemble_size_file)
     """
 
-    # test ensemble size
-    for ensemble_size in ensemble_size_list:
-        print(f"Next calculation with differences in ensemble size: ensemble size = {ensemble_size}")
-        results = train_with_params(seed=42, ensemble_size=ensemble_size, alpha_init=0.5, gamma_init=0.5, num_epochs=15,
-                                    batch_size=ensemble_size, lr=0.0002, device=device)
-        save_results_to_csv(results, ensemble_size_file)
-
-
-sys.argv = ["Complex_Testing.py"]
-typer.run(run_experiments)
+if __name__ == "__main__":
+    app()
