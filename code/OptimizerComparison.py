@@ -458,6 +458,88 @@ class BatchEnsembleComplexCNN(nn.Module):
 
         return x
 
+class SharedParametersCNN(nn.Module):
+    def __init__(self, num_heads=4):
+        super(SharedParametersCNN, self).__init__()
+        self.num_heads = num_heads
+        self.num_classes = 10
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)  # Changed input channels to 3
+        self.bn1 = nn.BatchNorm2d(32)
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.shared_fc = nn.Linear(64 * 8 * 8, 128)  # Adjusted input size
+        # Multiple heads for classification
+        self.heads = nn.ModuleList([nn.Linear(128, 10) for _ in range(num_heads)])
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.conv1(x)))  # [batch_size, 32, 32, 32]
+        x = self.pool(x)  # [batch_size, 32, 16, 16]
+        x = self.relu(self.bn2(self.conv2(x)))  # [batch_size, 64, 16, 16]
+        x = self.pool(x)  # [batch_size, 64, 8, 8]
+        x = x.view(x.size(0), -1)  # [batch_size, 64*8*8]
+        x = self.shared_fc(x)  # [batch_size, 128]
+        # Collect outputs from all heads
+        outputs = [head(x) for head in self.heads]
+        outputs = torch.stack(outputs)  # Shape: [num_heads, batch_size, num_classes]
+        # Average the outputs over heads
+        x = outputs.mean(dim=0)  # Shape: [batch_size, num_classes]
+        return x
+
+class SharedParametersBatchEnsembleCNN(nn.Module):
+    def __init__(self, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
+        super(SharedParametersBatchEnsembleCNN, self).__init__()
+        self.ensemble_size = ensemble_size
+        self.num_classes = 10
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(2)
+
+        # Shared BatchEnsemble convolutional layers
+        self.conv1 = Conv2d(
+            3, 32, kernel_size=3, padding=1,  # Changed input channels to 3
+            ensemble_size=ensemble_size,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
+        )
+        self.bn1 = BatchNorm2d(32, ensemble_size=ensemble_size)
+        self.conv2 = Conv2d(
+            32, 64, kernel_size=3, padding=1,
+            ensemble_size=ensemble_size,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
+        )
+        self.bn2 = BatchNorm2d(64, ensemble_size=ensemble_size)
+
+        # Shared fully connected layer
+        self.shared_fc = BELinear(
+            64 * 8 * 8, 128,  # Adjusted input size
+            ensemble_size=ensemble_size,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
+        )
+
+        # Multiple heads for classification
+        self.heads = nn.ModuleList([
+            nn.Linear(128, self.num_classes) for _ in range(ensemble_size)
+        ])
+
+    def forward(self, x):
+        # Shared convolutional layers
+        x = self.relu(self.bn1(self.conv1(x)))  # Shape: [batch_size * ensemble_size, 32, 32, 32]
+        x = self.pool(x)  # Shape: [batch_size * ensemble_size, 32, 16, 16]
+        x = self.relu(self.bn2(self.conv2(x)))  # Shape: [batch_size * ensemble_size, 64, 16, 16]
+        x = self.pool(x)  # Shape: [batch_size * ensemble_size, 64, 8, 8]
+        x = x.view(x.size(0), -1)  # Shape: [batch_size * ensemble_size, 64*8*8]
+
+        # Shared fully connected layer
+        x = self.shared_fc(x)  # Shape: [batch_size * ensemble_size, 128]
+
+        # Reshape x to [ensemble_size, batch_size, 128]
+        batch_size = x.size(0) // self.ensemble_size
+        x = x.view(self.ensemble_size, batch_size, -1)
+
+
 #-----------------------------------------------------------------------------------------
 # training
 #-----------------------------------------------------------------------------------------
@@ -476,87 +558,133 @@ def train_model(
     model.to(device)  # Move the model to the GPU if available
     criterion = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     if optimizer_type == "adam":
+        print("Selected adam")
         optimizer = optim.Adam(model.parameters(), lr=lr)
     elif optimizer_type == "sgd":
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     elif optimizer_type == "ivon":
         optimizer = ivon.IVON(model.parameters(), lr=lr, ess=len(train_loader), weight_decay=1e-4, beta1=0.9, beta2=0.999)
 
-
     train_losses = []
     test_accuracies = []
-    for epoch in range(num_epochs):
-        model.train()
-        epoch_loss = 0.0
-        for images, labels in train_loader:
-            images = images.to(device)
-            labels = labels.to(device)
-            optimizer.zero_grad()
-            if model_type == "batchensemble" or model_type == "batchensemble_complex":
-                # Repeat images and labels for BatchEnsemble
-                images = images.repeat(ensemble_size, 1, 1, 1)
-                labels = labels.repeat(ensemble_size)
-            elif model_type == "shared_batchensemble":
-                # Repeat images only
-                images = images.repeat(ensemble_size, 1, 1, 1)
-                # Do not repeat labels
-            # For other model types (including "complex"), no repetition is needed
-            outputs = model(images)
-            if model_type == "shared_batchensemble":
-                # Reshape outputs to [ensemble_size, batch_size, num_classes]
-                outputs = outputs.view(ensemble_size, -1, model.num_classes)
-                # Average the outputs over ensemble members
-                outputs = outputs.mean(dim=0)
-            loss = criterion(outputs, labels)
-            loss.backward()
 
-            if optimizer_type == "ivon":
-                with optimizer.sampled_params(train=True):
-                    optimizer.step()
-            else:
-                optimizer.step()
-
-            epoch_loss += loss.item()
-        train_losses.append(epoch_loss / len(train_loader))
-        train_loss = epoch_loss / len(train_loader)
-
-        # Evaluate model
-        model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for images, labels in test_loader:
+    if optimizer_type=="ivon":
+        print("in ivon training loop")
+        for epoch in range(num_epochs):
+            model.train()
+            epoch_loss = 0.0
+            for images, labels in train_loader:
                 images = images.to(device)
                 labels = labels.to(device)
-                if model_type == "batchensemble" or model_type == "batchensemble_complex":
-                    images = images.repeat(ensemble_size, 1, 1, 1)
+                ##
+                with optimizer.sampled_params(train=True):
+                    ### IVON: move inside with from here or ADAM: move one step back from here
+                    optimizer.zero_grad()
+                    if model_type == "batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        labels = labels.repeat(ensemble_size)
                     outputs = model(images)
-                    # Reshape and average over ensemble instances
-                    outputs = outputs.view(ensemble_size, -1, model.num_classes)
-                    outputs = outputs.mean(dim=0)
-                elif model_type == "shared_batchensemble":
-                    images = images.repeat(ensemble_size, 1, 1, 1)
-                    outputs = model(images)
-                else:
-                    outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-        test_accuracy = 100 * correct / total
-        test_accuracies.append(test_accuracy)
-        print(
-            f'Epoch [{epoch + 1}/{num_epochs}], {model_type.replace("_", " ").capitalize()} Model Test Accuracy: {test_accuracy:.2f}%')
-        # Get the current timestamp
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    loss = criterion(outputs, labels)
+                    loss.backward()
+                ##### IVON: until here inside "with" or ADAM: move out until here
+                optimizer.step()
+                epoch_loss += loss.item()
+            train_loss = epoch_loss / len(train_loader)
+            train_losses.append(train_loss)
 
-        # Log the results to the DataFrame
-        log_df = pd.concat([log_df, pd.DataFrame([[timestamp, model_type, epoch, train_loss, test_accuracy]],
-                                                 columns=log_df.columns)], ignore_index=True)
 
-        # Print progress
-        print(log_df)
+            # Evaluate model
+            model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for images, labels in test_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+                    if model_type == "batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                        outputs = outputs.view(ensemble_size, -1, 10)
+                        outputs = outputs.mean(dim=0)
+                    else:
+                        outputs = model(images)
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+            test_accuracy = 100 * correct / total
+            test_accuracies.append(test_accuracy)
+            print(
+                f'Epoch [{epoch + 1}/{num_epochs}], {model_type.replace("_", " ").capitalize()} Model Test Accuracy: {test_accuracy:.2f}%')
+            # Get the current timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Log the results to the DataFrame
+            log_df = pd.concat([log_df, pd.DataFrame(
+                [[timestamp, model_type, optimizer_type, epoch, train_loss, test_accuracy, ensemble_size, lr]],
+                columns=log_df.columns)], ignore_index=True)
+
+            # Print progress
+            print(log_df)
+    else: #no ivon
+        print("in no ivon training loop")
+        for epoch in range(num_epochs):
+            print(f"number of epoch {epoch}")
+            model.train()
+            epoch_loss = 0.0
+            for images, labels in train_loader:
+                images = images.to(device)
+                labels = labels.to(device)
+                ##
+                #with optimizer.sampled_params(train=True):
+                    ### IVON: move inside with from here or ADAM: move one step back from here
+                optimizer.zero_grad()
+                if model_type == "batchensemble":
+                    images = images.repeat(ensemble_size, 1, 1, 1)
+                    labels = labels.repeat(ensemble_size)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                ##### IVON: until here inside "with" or ADAM: move out until here
+                optimizer.step()
+                epoch_loss += loss.item()
+            train_loss = epoch_loss / len(train_loader)
+            train_losses.append(train_loss)
+            print(
+                f'Epoch [{epoch + 1}/{num_epochs}], {model_type.replace("_", " ").capitalize()} Model Test Accuracy: {test_accuracy:.2f}%')
+
+            # Evaluate model
+            model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for images, labels in test_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+                    if model_type == "batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                        outputs = outputs.view(ensemble_size, -1, 10)
+                        outputs = outputs.mean(dim=0)
+                    else:
+                        outputs = model(images)
+                    _, predicted = torch.max(outputs.data, 1)
+                    total += labels.size(0)
+                    correct += (predicted == labels).sum().item()
+            test_accuracy = 100 * correct / total
+            test_accuracies.append(test_accuracy)
+
+            print(
+                f'Epoch [{epoch + 1}/{num_epochs}], {model_type.replace("_", " ").capitalize()} Model Test Accuracy: {test_accuracy:.2f}%')
+            # Get the current timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Log the results to the DataFrame
+            log_df = pd.concat([log_df, pd.DataFrame([[timestamp, model_type, optimizer_type, epoch, train_losses, test_accuracy, ensemble_size, lr]],
+                                                     columns=log_df.columns)], ignore_index=True)
+
+            # Print progress
+            print(log_df)
 
     return train_losses, test_accuracies, log_df
 
@@ -586,6 +714,8 @@ def main():
     # Hyperparameters
     ensemble_size = 4
     alpha_gamma_init = 0.5
+    alpha_init = 0.5
+    gamma_init = 0.5
     num_epochs = 5
     batch_size = 128
     lr = 0.01
@@ -618,28 +748,72 @@ def main():
     )
 
 
-    log_df = pd.DataFrame(columns=["timestamp", "model_type","epoch", "train_loss", "val_loss"])
+    log_df = pd.DataFrame(columns=["timestamp", "model_type", "optimizer","epoch", "train_loss", "val_loss", "ensemble_size", "learning_rate"])
     output_folder = "data"
     os.makedirs(output_folder, exist_ok=True)
 
-    ensemble_size_list = [2]
+    ensemble_size_list = [2, 4, 8]
+    optimizer_list = ["ivon", "sgd", "adam"]
+    model_type_list = []
+    model_types = [
+        "simple",
+        "batchensemble",
+        # "sharedparameters",
+        # "shared_batchensemble",
+        "complex",
+        "batchensemble_complex"
+    ]
+
+    # Initialize dictionaries to store CNN models and their metrics
+    cnn_models = {}
+    cnn_train_losses = {}
+    cnn_test_accuracies = {}
+
+    # for the differences
+    results = []
+
+    # Train and evaluate CNN models
+
 
     results_file = os.path.join(output_folder, "results.csv")
 
-    for ensemblesize in ensemble_size_list:
-        train_loss, test_accuracy, log_df = train_model(
-        model = SimpleCNN(),
-        train_loader=train_loader,
-        test_loader=test_loader,
-        model_type="simple",
-        optimizer_type="adam",
-        ensemble_size=ensemblesize,
-        num_epochs=5,
-        lr=0.0002,
-        device=device,
-        log_df=log_df)
+    for optimizer_type in optimizer_list:
+        for ensemble_size in ensemble_size_list:
+            for model_type in model_types:
+                if model_type == "simple":
+                    model = SimpleCNN().to(device)
+                    ensemble_size_cnn = 1
+                elif model_type == "batchensemble":
+                    model = BatchEnsembleCNN(
+                        ensemble_size=ensemble_size,
+                        alpha_init=alpha_init,
+                        gamma_init=gamma_init
+                    ).to(device)
+                    ensemble_size_cnn = ensemble_size
+                elif model_type == "complex":
+                    model = ComplexCNN().to(device)
+                    ensemble_size_cnn = 1  # No ensemble in this model
+                elif model_type == "batchensemble_complex":
+                    model = BatchEnsembleComplexCNN(
+                        ensemble_size=ensemble_size,
+                        alpha_init=alpha_init,
+                        gamma_init=gamma_init
+                    ).to(device)
+                    ensemble_size_cnn = ensemble_size
+                else:
+                    raise ValueError("Invalid model_type.")
 
-
+                train_loss, test_accuracy, log_df = train_model(
+                model = model,
+                train_loader=train_loader,
+                test_loader=test_loader,
+                model_type=model_type,
+                optimizer_type=optimizer_type,
+                ensemble_size=ensemble_size_cnn,
+                num_epochs=5,
+                lr=0.0002,
+                device=device,
+                log_df=log_df)
 
     save_results_to_csv(log_df, results_file)
 
