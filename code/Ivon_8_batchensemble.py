@@ -852,12 +852,12 @@ def train_with_params(
 
     # Define model types, including 'complex' and 'batchensemble_complex'
     model_types = [
-        "simple",
-        #"batchensemble",
+        #"simple",
+        "batchensemble",
         # "sharedparameters",
         # "shared_batchensemble",
-        #"complex"#,
-        #"batchensemble_complex"
+        ##,
+        "batchensemble_complex"
     ]
 
     # Initialize dictionaries to store CNN models and their metrics
@@ -974,7 +974,7 @@ def run_experiments():
     """Defines a CLI to test multiple parameter combinations."""
     alpha = 1.0
     gamma =  0.2
-    ensemble_size = 2 # 4, 8 ###
+    ensemble_size = 8 # 4, 8 ###
     lr = 0.002
     optimizer_type = "ivon" ### 
 
@@ -984,7 +984,7 @@ def run_experiments():
     output_folder = "data"
     os.makedirs(output_folder, exist_ok=True)
 
-    optimizer_file = os.path.join(output_folder, "ivon_results.csv") ###
+    optimizer_file = os.path.join(output_folder, "ivon_results_8_batchensemble.csv") ###
 
     # test optimizer
     print(f"Next calculation with differences in alpha and gamma: alpha={alpha} and gamma={gamma}")
