@@ -633,80 +633,173 @@ def train_mnist_model(
         num_epochs=15,
         lr=0.0002,
         device=torch.device("cpu"),
-        optimizer_type = "adam"
+        optimizer_type="adam"
 ):
     model.to(device)  # Move the model to the GPU if available
     criterion = nn.CrossEntropyLoss()
-    ###
 
+    # Set the optimizer
     if optimizer_type == "adam":
         optimizer = optim.Adam(model.parameters(), lr=lr)
     elif optimizer_type == "sgd":
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     elif optimizer_type == "ivon":
         optimizer = ivon.IVON(model.parameters(), lr=lr, ess=len(train_loader))
+    else:
+        raise ValueError(f"Unknown optimizer type: {optimizer_type}")
 
-    ###
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    # Metrics storage
     train_losses = []
-    test_accuracies = []
-    for epoch in range(num_epochs):
-        model.train()
-        epoch_loss = 0.0
-        for images, labels in train_loader:
-            images = images.to(device)
-            labels = labels.to(device)
-            optimizer.zero_grad()
-            if model_type == "batchensemble" or model_type == "batchensemble_complex":
-                # Repeat images and labels for BatchEnsemble
-                images = images.repeat(ensemble_size, 1, 1, 1)
-                labels = labels.repeat(ensemble_size)
-            elif model_type == "shared_batchensemble":
-                # Repeat images only
-                images = images.repeat(ensemble_size, 1, 1, 1)
-                # Do not repeat labels
-            # For other model types (including "complex"), no repetition is needed
-            outputs = model(images)
-            if model_type == "shared_batchensemble":
-                # Reshape outputs to [ensemble_size, batch_size, num_classes]
-                outputs = outputs.view(ensemble_size, -1, model.num_classes)
-                # Average the outputs over ensemble members
-                outputs = outputs.mean(dim=0)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            epoch_loss += loss.item()
-        train_losses.append(epoch_loss / len(train_loader))
+    val_losses = []
+    train_accuracies = []
+    val_accuracies = []
 
-        # Evaluate model
-        model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for images, labels in test_loader:
+    if optimizer_type == "ivon":
+
+        for epoch in range(num_epochs):
+            # Training phase
+            model.train()
+            epoch_loss = 0.0
+            correct_train = 0
+            total_train = 0
+
+            for images, labels in train_loader:
                 images = images.to(device)
                 labels = labels.to(device)
-                if model_type == "batchensemble" or model_type == "batchensemble_complex":
-                    images = images.repeat(ensemble_size, 1, 1, 1)
+
+                with optimizer.sampled_params(train=True):
+                    optimizer.zero_grad()
+                    if model_type in ["batchensemble", "batchensemble_complex"]:
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        labels = labels.repeat(ensemble_size)
+                    elif model_type == "shared_batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+
                     outputs = model(images)
-                    # Reshape and average over ensemble instances
-                    outputs = outputs.view(ensemble_size, -1, model.num_classes)
-                    outputs = outputs.mean(dim=0)
+                    if model_type == "shared_batchensemble":
+                        outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+
+                    loss = criterion(outputs, labels)
+
+                loss.backward()
+                optimizer.step()
+
+                epoch_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total_train += labels.size(0)
+                correct_train += (predicted == labels).sum().item()
+
+            train_losses.append(epoch_loss / len(train_loader))
+            train_accuracy = 100 * correct_train / total_train
+            train_accuracies.append(train_accuracy)
+
+            # Validation phase
+            model.eval()
+            correct_val = 0
+            total_val = 0
+            val_loss = 0.0
+
+            with torch.no_grad():
+                for images, labels in test_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+
+                    if model_type in ["batchensemble", "batchensemble_complex"]:
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                        outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+                    elif model_type == "shared_batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                    else:
+                        outputs = model(images)
+
+                    loss = criterion(outputs, labels)
+                    val_loss += loss.item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    total_val += labels.size(0)
+                    correct_val += (predicted == labels).sum().item()
+
+            val_losses.append(val_loss / len(test_loader))
+            val_accuracy = 100 * correct_val / total_val
+            val_accuracies.append(val_accuracy)
+
+            print(f'Epoch [{epoch + 1}/{num_epochs}]')
+            print(f'Training Loss: {train_losses[-1]:.4f}, Training Accuracy: {train_accuracy:.2f}%')
+            print(f'Validation Loss: {val_losses[-1]:.4f}, Validation Accuracy: {val_accuracy:.2f}%')
+    
+    else:
+        for epoch in range(num_epochs):
+            # Training phase
+            model.train()
+            epoch_loss = 0.0
+            correct_train = 0
+            total_train = 0
+
+            for images, labels in train_loader:
+                images = images.to(device)
+                labels = labels.to(device)
+                optimizer.zero_grad()
+
+                if model_type in ["batchensemble", "batchensemble_complex"]:
+                    images = images.repeat(ensemble_size, 1, 1, 1)
+                    labels = labels.repeat(ensemble_size)
                 elif model_type == "shared_batchensemble":
                     images = images.repeat(ensemble_size, 1, 1, 1)
-                    outputs = model(images)
-                else:
-                    outputs = model(images)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-        test_accuracy = 100 * correct / total
-        test_accuracies.append(test_accuracy)
-        print(
-            f'Epoch [{epoch + 1}/{num_epochs}], {model_type.replace("_", " ").capitalize()} Model Test Accuracy: {test_accuracy:.2f}%')
 
-    return train_losses, test_accuracies
+                outputs = model(images)
+                if model_type == "shared_batchensemble":
+                    outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                epoch_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total_train += labels.size(0)
+                correct_train += (predicted == labels).sum().item()
+
+            train_losses.append(epoch_loss / len(train_loader))
+            train_accuracy = 100 * correct_train / total_train
+            train_accuracies.append(train_accuracy)
+
+            # Validation phase
+            model.eval()
+            correct_val = 0
+            total_val = 0
+            val_loss = 0.0
+
+            with torch.no_grad():
+                for images, labels in test_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+
+                    if model_type in ["batchensemble", "batchensemble_complex"]:
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                        outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+                    elif model_type == "shared_batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                    else:
+                        outputs = model(images)
+
+                    loss = criterion(outputs, labels)
+                    val_loss += loss.item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    total_val += labels.size(0)
+                    correct_val += (predicted == labels).sum().item()
+
+            val_losses.append(val_loss / len(test_loader))
+            val_accuracy = 100 * correct_val / total_val
+            val_accuracies.append(val_accuracy)
+
+            print(f'Epoch [{epoch + 1}/{num_epochs}]')
+            print(f'Training Loss: {train_losses[-1]:.4f}, Training Accuracy: {train_accuracy:.2f}%')
+            print(f'Validation Loss: {val_losses[-1]:.4f}, Validation Accuracy: {val_accuracy:.2f}%')
+
+    return train_losses, val_losses, train_accuracies, val_accuracies
 
 
 # Main function
@@ -763,14 +856,16 @@ def train_with_params(
         #"batchensemble",
         # "sharedparameters",
         # "shared_batchensemble",
-        "complex"#,
+        #"complex"#,
         #"batchensemble_complex"
     ]
 
     # Initialize dictionaries to store CNN models and their metrics
     cnn_models = {}
     cnn_train_losses = {}
-    cnn_test_accuracies = {}
+    cnn_val_losses = {}
+    cnn_train_acc = {}
+    cnn_val_acc = {}
 
     # for the differences
     results = []
@@ -814,7 +909,7 @@ def train_with_params(
 
         cnn_models[model_type] = model
         print(f"Training CNN model: {model_type}")
-        tr_losses, te_accuracies = train_mnist_model(
+        train_losses, val_losses, train_accuracies, val_accuracies = train_mnist_model(
             model,
             train_loader,
             test_loader,
@@ -825,8 +920,10 @@ def train_with_params(
             device=device,  # Ensure device is passed
         )
 
-        cnn_train_losses[model_type] = tr_losses
-        cnn_test_accuracies[model_type] = te_accuracies
+        cnn_train_losses[model_type] = train_losses
+        cnn_val_losses[model_type] = val_losses
+        cnn_train_acc[model_type] = train_accuracies
+        cnn_val_acc[model_type] = val_accuracies
 
         result = {
             "ensemble_size": ensemble_size,
@@ -835,7 +932,9 @@ def train_with_params(
             "lr": lr,
             "model_type": model_type,
             "train_loss": cnn_train_losses[model_type],
-            "cnn_test_accuracies": cnn_test_accuracies[model_type],
+            "val_loss": cnn_val_losses[model_type],
+            "train_acc": cnn_train_acc[model_type],
+            "val_acc": cnn_val_acc[model_type]
         }
         results.append(result)
 
@@ -875,9 +974,9 @@ def run_experiments():
     """Defines a CLI to test multiple parameter combinations."""
     alpha = 1.0
     gamma =  0.2
-    ensemble_size = 2 # 4, 8
+    ensemble_size = 2 # 4, 8 ###
     lr = 0.002
-    optimizer_type = "adam"
+    optimizer_type = "ivon" ### 
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -885,7 +984,7 @@ def run_experiments():
     output_folder = "data"
     os.makedirs(output_folder, exist_ok=True)
 
-    optimizer_file = os.path.join(output_folder, "adam_results.csv")
+    optimizer_file = os.path.join(output_folder, "ivon_results.csv") ###
 
     # test optimizer
     print(f"Next calculation with differences in alpha and gamma: alpha={alpha} and gamma={gamma}")
