@@ -30,5 +30,8 @@ nvidia-smi
 source .venv/bin/activate
 ### Execute the Python script
 echo "environment has been activated"
+
+pip install ivon-opt
+
 python --version
 python Complex_Test.py # email und file anpassen, in terminal "bsub < submit_test.sh" und status zu bekommen "bstat"
