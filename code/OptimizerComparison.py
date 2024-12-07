@@ -1,16 +1,13 @@
+import typer
 # Import necessary libraries
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import datasets, transforms
 import torch.optim as optim
-import ivon
-import typer
 import os
-from datetime import datetime
 import csv
-
-app = typer.Typer()
+import ivon
 
 # BatchEnsemble implementation
 
@@ -242,9 +239,8 @@ class StandardScaler:
             self.std = self.std.to(target_device)
         return self
 
-#-----------------------------------------------------------------------------------------
+
 # CNN Models
-#-----------------------------------------------------------------------------------------
 class SimpleCNN(nn.Module):
     def __init__(self):
         super(SimpleCNN, self).__init__()
@@ -265,6 +261,45 @@ class SimpleCNN(nn.Module):
         x = x.view(x.size(0), -1)  # [batch_size, 64*8*8]
         x = self.fc(x)  # [batch_size, 10]
         return x
+
+
+class SharedParametersCNN(nn.Module):
+    def __init__(self, num_heads=4):
+        super(SharedParametersCNN, self).__init__()
+        self.num_heads = num_heads
+        self.num_classes = 10
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)  # Changed input channels to 3
+        self.bn1 = nn.BatchNorm2d(32)
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(2)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.shared_fc = nn.Linear(64 * 8 * 8, 128)  # Adjusted input size
+        # Multiple heads for classification
+        self.heads = nn.ModuleList([nn.Linear(128, 10) for _ in range(num_heads)])
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for idx, head in enumerate(self.heads):
+            torch.manual_seed(torch.seed() + idx)
+            nn.init.kaiming_normal_(head.weight, mode='fan_out', nonlinearity='relu')
+            if head.bias is not None:
+                nn.init.zeros_(head.bias)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.conv1(x)))  # [batch_size, 32, 32, 32]
+        x = self.pool(x)  # [batch_size, 32, 16, 16]
+        x = self.relu(self.bn2(self.conv2(x)))  # [batch_size, 64, 16, 16]
+        x = self.pool(x)  # [batch_size, 64, 8, 8]
+        x = x.view(x.size(0), -1)  # [batch_size, 64*8*8]
+        x = self.shared_fc(x)  # [batch_size, 128]
+        # Collect outputs from all heads
+        outputs = [head(x) for head in self.heads]
+        outputs = torch.stack(outputs)  # Shape: [num_heads, batch_size, num_classes]
+        # Average the outputs over heads
+        x = outputs.mean(dim=0)  # Shape: [batch_size, num_classes]
+        return x
+
 
 class BatchEnsembleCNN(nn.Module):
     def __init__(self, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
@@ -287,6 +322,28 @@ class BatchEnsembleCNN(nn.Module):
                            ensemble_size=ensemble_size,
                            alpha_init=alpha_init,
                            gamma_init=gamma_init)
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, (Conv2d, BELinear)):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # Initialize alpha_param and gamma_param differently for each ensemble member
+                if m.alpha_param is not None:
+                    for idx in range(m.ensemble_size):
+                        torch.manual_seed(torch.seed() + idx)
+                        random_sign_(m.alpha_param[idx], prob=m.alpha_init, value=1.0)
+                if m.gamma_param is not None:
+                    for idx in range(m.ensemble_size):
+                        torch.manual_seed(torch.seed() + idx + 100)
+                        random_sign_(m.gamma_param[idx], prob=m.gamma_init, value=1.0)
+            elif isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, BatchNorm2d):
+                nn.init.ones_(m.weight_be)
+                nn.init.zeros_(m.bias_be)
 
     def forward(self, x):
         x = self.relu(self.bn1(self.conv1(x)))  # [batch_size * ensemble_size, 32, 32, 32]
@@ -296,6 +353,98 @@ class BatchEnsembleCNN(nn.Module):
         x = x.view(x.size(0), -1)  # [batch_size * ensemble_size, 64*8*8]
         x = self.fc(x)  # [batch_size * ensemble_size, 10]
         return x
+
+
+class SharedParametersBatchEnsembleCNN(nn.Module):
+    def __init__(self, ensemble_size=4, alpha_init=0.5, gamma_init=0.5):
+        super(SharedParametersBatchEnsembleCNN, self).__init__()
+        self.ensemble_size = ensemble_size
+        self.num_classes = 10
+        self.relu = nn.ReLU()
+        self.pool = nn.MaxPool2d(2)
+
+        # Shared BatchEnsemble convolutional layers
+        self.conv1 = Conv2d(
+            3, 32, kernel_size=3, padding=1,  # Changed input channels to 3
+            ensemble_size=ensemble_size,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
+        )
+        self.bn1 = BatchNorm2d(32, ensemble_size=ensemble_size)
+        self.conv2 = Conv2d(
+            32, 64, kernel_size=3, padding=1,
+            ensemble_size=ensemble_size,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
+        )
+        self.bn2 = BatchNorm2d(64, ensemble_size=ensemble_size)
+
+        # Shared fully connected layer
+        self.shared_fc = BELinear(
+            64 * 8 * 8, 128,  # Adjusted input size
+            ensemble_size=ensemble_size,
+            alpha_init=alpha_init,
+            gamma_init=gamma_init
+        )
+
+        # Multiple heads for classification
+        self.heads = nn.ModuleList([
+            nn.Linear(128, self.num_classes) for _ in range(ensemble_size)
+        ])
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, (Conv2d, BELinear)):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # Initialize alpha_param and gamma_param differently for each ensemble member
+                if m.alpha_param is not None:
+                    for idx in range(m.ensemble_size):
+                        torch.manual_seed(torch.seed() + idx)
+                        random_sign_(m.alpha_param[idx], prob=m.alpha_init, value=1.0)
+                if m.gamma_param is not None:
+                    for idx in range(m.ensemble_size):
+                        torch.manual_seed(torch.seed() + idx + 100)
+                        random_sign_(m.gamma_param[idx], prob=m.gamma_init, value=1.0)
+            elif isinstance(m, nn.Linear):
+                for idx, head in enumerate(self.heads):
+                    torch.manual_seed(torch.seed() + idx)
+                    nn.init.kaiming_normal_(head.weight, mode='fan_out', nonlinearity='relu')
+                    if head.bias is not None:
+                        nn.init.zeros_(head.bias)
+            elif isinstance(m, BatchNorm2d):
+                nn.init.ones_(m.weight_be)
+                nn.init.zeros_(m.bias_be)
+
+    def forward(self, x):
+        # Shared convolutional layers
+        x = self.relu(self.bn1(self.conv1(x)))  # Shape: [batch_size * ensemble_size, 32, 32, 32]
+        x = self.pool(x)  # Shape: [batch_size * ensemble_size, 32, 16, 16]
+        x = self.relu(self.bn2(self.conv2(x)))  # Shape: [batch_size * ensemble_size, 64, 16, 16]
+        x = self.pool(x)  # Shape: [batch_size * ensemble_size, 64, 8, 8]
+        x = x.view(x.size(0), -1)  # Shape: [batch_size * ensemble_size, 64*8*8]
+
+        # Shared fully connected layer
+        x = self.shared_fc(x)  # Shape: [batch_size * ensemble_size, 128]
+
+        # Reshape x to [ensemble_size, batch_size, 128]
+        batch_size = x.size(0) // self.ensemble_size
+        x = x.view(self.ensemble_size, batch_size, -1)
+
+        # Apply each head and collect outputs
+        outputs = []
+        for i, head in enumerate(self.heads):
+            out = head(x[i])  # x[i] is [batch_size, 128]
+            outputs.append(out)
+
+        # Stack outputs: Shape [ensemble_size, batch_size, num_classes]
+        outputs = torch.stack(outputs)  # Shape: [ensemble_size, batch_size, num_classes]
+
+        # Average over ensemble members
+        outputs = outputs.mean(dim=0)  # Shape: [batch_size, num_classes]
+
+        return outputs
+
 
 class ComplexCNN(nn.Module):
     def __init__(self, num_classes=10):
@@ -441,6 +590,24 @@ class BatchEnsembleComplexCNN(nn.Module):
                      alpha_init=alpha_init,
                      gamma_init=gamma_init)
         )
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, (Conv2d, BELinear)):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                # Initialize alpha_param and gamma_param differently for each ensemble member
+                if m.alpha_param is not None:
+                    for idx in range(m.ensemble_size):
+                        torch.manual_seed(torch.seed() + idx)
+                        random_sign_(m.alpha_param[idx], prob=m.alpha_init, value=1.0)
+                if m.gamma_param is not None:
+                    for idx in range(m.ensemble_size):
+                        torch.manual_seed(torch.seed() + idx + 100)
+                        random_sign_(m.gamma_param[idx], prob=m.gamma_init, value=1.0)
+            elif isinstance(m, BatchNorm2d):
+                nn.init.ones_(m.weight_be)
+                nn.init.zeros_(m.bias_be)
 
     def forward(self, x):
         # Forward pass through convolutional layers
@@ -454,169 +621,221 @@ class BatchEnsembleComplexCNN(nn.Module):
 
         return x
 
-#-----------------------------------------------------------------------------------------
-# training
-#-----------------------------------------------------------------------------------------
-def train_model(
+
+# Training and visualization functions
+
+def train_cifar_model(
         model,
         train_loader,
         test_loader,
         model_type="simple",
-        optimizer_type="adam",
         ensemble_size=4,
         num_epochs=15,
         lr=0.0002,
         device=torch.device("cpu"),
-        log_data=[], #pd.DataFrame(),
+        optimizer_type="adam"
 ):
     model.to(device)  # Move the model to the GPU if available
     criterion = nn.CrossEntropyLoss()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    # Set the optimizer
     if optimizer_type == "adam":
         optimizer = optim.Adam(model.parameters(), lr=lr)
     elif optimizer_type == "sgd":
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     elif optimizer_type == "ivon":
-        optimizer = ivon.IVON(model.parameters(), lr=lr, ess=len(train_loader), weight_decay=1e-4, beta1=0.9, beta2=0.999)
+        optimizer = ivon.IVON(model.parameters(), lr=lr, ess=len(train_loader))
+    else:
+        raise ValueError(f"Unknown optimizer type: {optimizer_type}")
 
-
+    # Metrics storage
     train_losses = []
-    test_accuracies = []
-    for epoch in range(num_epochs):
-        model.train()
-        epoch_loss = 0.0
-        for images, labels in train_loader:
-            images = images.to(device)
-            labels = labels.to(device)
-            optimizer.zero_grad()
-            if model_type == "batchensemble" or model_type == "batchensemble_complex":
-                # Repeat images and labels for BatchEnsemble
-                images = images.repeat(ensemble_size, 1, 1, 1)
-                labels = labels.repeat(ensemble_size)
-            elif model_type == "shared_batchensemble":
-                # Repeat images only
-                images = images.repeat(ensemble_size, 1, 1, 1)
-                # Do not repeat labels
-            # For other model types (including "complex"), no repetition is needed
-            outputs = model(images)
-            if model_type == "shared_batchensemble":
-                # Reshape outputs to [ensemble_size, batch_size, num_classes]
-                outputs = outputs.view(ensemble_size, -1, model.num_classes)
-                # Average the outputs over ensemble members
-                outputs = outputs.mean(dim=0)
-            loss = criterion(outputs, labels)
-            loss.backward()
+    val_losses = []
+    train_accuracies = []
+    val_accuracies = []
 
-            if optimizer_type == "ivon":
-                with optimizer.sampled_params(train=True):
-                    optimizer.step()
-            else:
-                optimizer.step()
+    if optimizer_type == "ivon":
 
-            epoch_loss += loss.item()
-        train_losses.append(epoch_loss / len(train_loader))
-        train_loss = epoch_loss / len(train_loader)
+        for epoch in range(num_epochs):
+            # Training phase
+            model.train()
+            epoch_loss = 0.0
+            correct_train = 0
+            total_train = 0
 
-        # Evaluate model
-        model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for images, labels in test_loader:
+            for images, labels in train_loader:
                 images = images.to(device)
                 labels = labels.to(device)
-                if model_type == "batchensemble" or model_type == "batchensemble_complex":
-                    images = images.repeat(ensemble_size, 1, 1, 1)
+
+                with optimizer.sampled_params(train=True):
+                    optimizer.zero_grad()
+                    if model_type in ["batchensemble", "batchensemble_complex"]:
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        labels = labels.repeat(ensemble_size)
+                    elif model_type == "shared_batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+
                     outputs = model(images)
-                    # Reshape and average over ensemble instances
-                    outputs = outputs.view(ensemble_size, -1, model.num_classes)
-                    outputs = outputs.mean(dim=0)
+                    if model_type == "shared_batchensemble":
+                        outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+
+                    loss = criterion(outputs, labels)
+
+                loss.backward()
+                optimizer.step()
+
+                epoch_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total_train += labels.size(0)
+                correct_train += (predicted == labels).sum().item()
+
+            train_losses.append(epoch_loss / len(train_loader))
+            train_accuracy = 100 * correct_train / total_train
+            train_accuracies.append(train_accuracy)
+
+            # Validation phase
+            model.eval()
+            correct_val = 0
+            total_val = 0
+            val_loss = 0.0
+
+            with torch.no_grad():
+                for images, labels in test_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
+
+                    if model_type in ["batchensemble", "batchensemble_complex"]:
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                        outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+                    elif model_type == "shared_batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                    else:
+                        outputs = model(images)
+
+                    loss = criterion(outputs, labels)
+                    val_loss += loss.item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    total_val += labels.size(0)
+                    correct_val += (predicted == labels).sum().item()
+
+            val_losses.append(val_loss / len(test_loader))
+            val_accuracy = 100 * correct_val / total_val
+            val_accuracies.append(val_accuracy)
+
+            print(f'Epoch [{epoch + 1}/{num_epochs}]')
+            print(f'Training Loss: {train_losses[-1]:.4f}, Training Accuracy: {train_accuracy:.2f}%')
+            print(f'Validation Loss: {val_losses[-1]:.4f}, Validation Accuracy: {val_accuracy:.2f}%')
+    
+    else:
+        for epoch in range(num_epochs):
+            # Training phase
+            model.train()
+            epoch_loss = 0.0
+            correct_train = 0
+            total_train = 0
+
+            for images, labels in train_loader:
+                images = images.to(device)
+                labels = labels.to(device)
+                optimizer.zero_grad()
+
+                if model_type in ["batchensemble", "batchensemble_complex"]:
+                    images = images.repeat(ensemble_size, 1, 1, 1)
+                    labels = labels.repeat(ensemble_size)
                 elif model_type == "shared_batchensemble":
                     images = images.repeat(ensemble_size, 1, 1, 1)
-                    outputs = model(images)
-                else:
-                    outputs = model(images)
+
+                outputs = model(images)
+                if model_type == "shared_batchensemble":
+                    outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                epoch_loss += loss.item()
                 _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-        test_accuracy = 100 * correct / total
-        test_accuracies.append(test_accuracy)
-        print(
-            f'Epoch [{epoch + 1}/{num_epochs}], {model_type.replace("_", " ").capitalize()} Model Test Accuracy: {test_accuracy:.2f}%')
-        # Get the current timestamp
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                total_train += labels.size(0)
+                correct_train += (predicted == labels).sum().item()
 
-        # # Log the results to the DataFrame
-        # log_df = pd.concat([log_df, pd.DataFrame([[timestamp, model_type, epoch, train_loss, test_accuracy]],
-        #                                          columns=log_df.columns)], ignore_index=True)
+            train_losses.append(epoch_loss / len(train_loader))
+            train_accuracy = 100 * correct_train / total_train
+            train_accuracies.append(train_accuracy)
 
-        # log the results to a dictionary
-        log_data.append({
-            "timestamp": timestamp,
-            "model_type": model_type,
-            "epoch": epoch,
-            "train_loss": train_loss,
-            "val_loss": test_accuracy
-        })
+            # Validation phase
+            model.eval()
+            correct_val = 0
+            total_val = 0
+            val_loss = 0.0
 
+            with torch.no_grad():
+                for images, labels in test_loader:
+                    images = images.to(device)
+                    labels = labels.to(device)
 
-        # Print progress
-        print(log_data)
+                    if model_type in ["batchensemble", "batchensemble_complex"]:
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                        outputs = outputs.view(ensemble_size, -1, model.num_classes).mean(dim=0)
+                    elif model_type == "shared_batchensemble":
+                        images = images.repeat(ensemble_size, 1, 1, 1)
+                        outputs = model(images)
+                    else:
+                        outputs = model(images)
 
-    return train_losses, test_accuracies, log_data
+                    loss = criterion(outputs, labels)
+                    val_loss += loss.item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    total_val += labels.size(0)
+                    correct_val += (predicted == labels).sum().item()
 
-def save_results_to_csv(data, file_path, fieldnames=None):
-    """Saves results to a CSV file without overwriting existing data."""
-    # Check if file exists
-    file_exists = os.path.isfile(file_path)
+            val_losses.append(val_loss / len(test_loader))
+            val_accuracy = 100 * correct_val / total_val
+            val_accuracies.append(val_accuracy)
 
-    # Open the file in append mode
-    with open(file_path, mode='a', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames) if fieldnames else csv.writer(file)
-        
-        # Write the header if the file does not exist
-        if not file_exists and isinstance(writer, csv.DictWriter):
-            writer.writeheader()
+            print(f'Epoch [{epoch + 1}/{num_epochs}]')
+            print(f'Training Loss: {train_losses[-1]:.4f}, Training Accuracy: {train_accuracy:.2f}%')
+            print(f'Validation Loss: {val_losses[-1]:.4f}, Validation Accuracy: {val_accuracy:.2f}%')
 
-        # Write the rows
-        if isinstance(data[0], dict):  # Dictionary
-            writer.writerows(data)
-        else:
-            writer.writerows(data) # list
-
-    if file_exists:
-        print(f"Appended results to {file_path}")
-    else:
-        print(f"Created new results file: {file_path}")
+    return train_losses, val_losses, train_accuracies, val_accuracies
 
 
-def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-    seed = 42
-    torch.manual_seed(seed)
+# Main function
+def train_with_params(
+        seed: int = typer.Option(42, help="Size of the seed"),
+        ensemble_size: int = typer.Option(4, help="Size of the ensemble"),
+        alpha_init: float = typer.Option(0.5, help="Initial value for Alpha in BatchEnsemble"),
+        gamma_init: float = typer.Option(0.5, help="Initial value for Gamma in BatchEnsemble"),
+        num_epochs: int = typer.Option(15, help="Number of training epochs"),
+        batch_size: int = typer.Option(256, help="Batch size for training"),
+        lr: float = typer.Option(0.0002, help="Learning rate for the optimizer"),
+        device: str = typer.Option("cpu", help="Device to use, 'cuda' for GPU or 'cpu' for CPU"),
+        optimizer_type = typer.Option("adam", help="Type of Optimizer")
+):
+    # Removed the global random seed to allow different initializations
+    # torch.manual_seed(seed)
+    num_heads = ensemble_size  # For consistency
 
-    # Hyperparameters
-    ensemble_size = 4
-    alpha_gamma_init = 0.5
-    num_epochs = 5
-    batch_size = 128
-    lr = 0.01
+    # Ensure that batch_size is divisible by ensemble_size
+    if batch_size % ensemble_size != 0:
+        raise ValueError("Batch size must be divisible by ensemble size.")
 
-    # Define transformations
+    # Define transformations for CIFAR-10
     transform = transforms.Compose([
         transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.4914, 0.4822, 0.4465],  # CIFAR-10 mean
+            std=[0.2023, 0.1994, 0.2010]  # CIFAR-10 std
+        ),
     ])
 
-    # CIFAR10
+    # Load CIFAR-10 dataset
     train_dataset = datasets.CIFAR10(root='./data', train=True,
                                      download=True, transform=transform)
     test_dataset = datasets.CIFAR10(root='./data', train=False,
                                     download=True, transform=transform)
-
-    # Adjust batch size to be multiple of ensemble_size
-    assert batch_size % ensemble_size == 0, "Batch size must be divisible by ensemble size."
 
     # Data loaders
     train_loader = torch.utils.data.DataLoader(
@@ -631,34 +850,149 @@ def main():
         shuffle=False
     )
 
+    # Define model types, including 'complex' and 'batchensemble_complex'
+    model_types = [
+        "simple",
+        "batchensemble",
+        # "sharedparameters",
+        # "shared_batchensemble",
+        "complex"#,
+        "batchensemble_complex"
+    ]
 
-    # log_df = pd.DataFrame(columns=["timestamp", "model_type","epoch", "train_loss", "val_loss"])
-    log_data = []
+    # Initialize dictionaries to store CNN models and their metrics
+    cnn_models = {}
+    cnn_train_losses = {}
+    cnn_val_losses = {}
+    cnn_train_acc = {}
+    cnn_val_acc = {}
+
+    # for the differences
+    results = []
+
+    # Train and evaluate CNN models
+    for model_type in model_types:
+        if model_type == "simple":
+            model = SimpleCNN().to(device)
+            ensemble_size_cnn = 1
+        elif model_type == "batchensemble":
+            model = BatchEnsembleCNN(
+                ensemble_size=ensemble_size,
+                alpha_init=alpha_init,
+                gamma_init=gamma_init
+            ).to(device)
+            ensemble_size_cnn = ensemble_size
+        elif model_type == "sharedparameters":
+            model = SharedParametersCNN(
+                num_heads=num_heads
+            ).to(device)
+            ensemble_size_cnn = 1  # Shared parameters handle multiple heads internally
+        elif model_type == "shared_batchensemble":
+            model = SharedParametersBatchEnsembleCNN(
+                ensemble_size=ensemble_size,
+                alpha_init=alpha_init,
+                gamma_init=gamma_init
+            ).to(device)
+            ensemble_size_cnn = ensemble_size
+        elif model_type == "complex":
+            model = ComplexCNN().to(device)
+            ensemble_size_cnn = 1  # No ensemble in this model
+        elif model_type == "batchensemble_complex":
+            model = BatchEnsembleComplexCNN(
+                ensemble_size=ensemble_size,
+                alpha_init=alpha_init,
+                gamma_init=gamma_init
+            ).to(device)
+            ensemble_size_cnn = ensemble_size
+        else:
+            raise ValueError("Invalid model_type.")
+
+        cnn_models[model_type] = model
+        print(f"Training CNN model: {model_type}")
+        train_losses, val_losses, train_accuracies, val_accuracies = train_cifar_model(
+            model,
+            train_loader,
+            test_loader,
+            model_type=model_type,
+            ensemble_size=ensemble_size_cnn,
+            num_epochs=num_epochs,
+            lr=lr,
+            device=device,  # Ensure device is passed
+        )
+
+        cnn_train_losses[model_type] = train_losses
+        cnn_val_losses[model_type] = val_losses
+        cnn_train_acc[model_type] = train_accuracies
+        cnn_val_acc[model_type] = val_accuracies
+
+        result = {
+            "ensemble_size": ensemble_size,
+            "num_epochs": num_epochs,
+            "batch_size": batch_size,
+            "lr": lr,
+            "model_type": model_type,
+            "train_loss": cnn_train_losses[model_type],
+            "val_loss": cnn_val_losses[model_type],
+            "train_acc": cnn_train_acc[model_type],
+            "val_acc": cnn_val_acc[model_type]
+        }
+        results.append(result)
+
+    return results
+
+
+def save_results_to_csv(results, file_path):
+    # Check if file exists
+    file_exists = os.path.isfile(file_path)
+
+    # Get the headers from the first dictionary in results
+    headers = results[0].keys() if results else []
+
+    # Open the file in append mode
+    with open(file_path, mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=headers)
+
+        # Write the header only if the file does not exist
+        if not file_exists:
+            writer.writeheader()
+
+        # Write each result as a row
+        for result in results:
+            writer.writerow(result)
+
+    if file_exists:
+        print(f"Appended results to {file_path}")
+    else:
+        print(f"Created new results file: {file_path}")
+
+
+app = typer.Typer()
+
+
+@app.command()
+def run_experiments():
+    """Defines a CLI to test multiple parameter combinations."""
+    alpha = 1.0
+    gamma =  0.2
+    ensemble_size = 2 # 2, 4, 8
+    lr = 0.002
+    optimizer_type = "adam" # adam, sgd, ivon
+
+    filename = optimizer_type + "_results_" + str(ensemble_size) + ".csv"
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
     output_folder = "data"
     os.makedirs(output_folder, exist_ok=True)
 
-    ensemble_size_list = [2]
+    optimizer_file = os.path.join(output_folder, filename)
 
-    results_file = os.path.join(output_folder, "optimizer_results.csv")
-
-    for ensemblesize in ensemble_size_list:
-        train_loss, test_accuracy, log_data = train_model(
-        model = SimpleCNN(),
-        train_loader=train_loader,
-        test_loader=test_loader,
-        model_type="simple",
-        optimizer_type="adam",
-        ensemble_size=ensemblesize,
-        num_epochs=5,
-        lr=0.0002,
-        device=device,
-        log_data=log_data) #log_df)
-
-
-    header = ["timestamp", "model_type", "epoch", "train_loss", "val_loss"]
-    save_results_to_csv(log_data, results_file, header)
+    # test optimizer
+    print(f"Next calculation with differences in alpha and gamma: alpha={alpha} and gamma={gamma}")
+    results = train_with_params(seed=42, ensemble_size=ensemble_size, alpha_init=alpha, gamma_init=gamma, num_epochs=15, batch_size=256, lr=lr, device=device, optimizer_type=optimizer_type)
+    save_results_to_csv(results, optimizer_file)
 
 
 if __name__ == "__main__":
-    #typer.run(main)
-    main()
+    app()
