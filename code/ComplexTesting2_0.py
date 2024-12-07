@@ -622,7 +622,7 @@ class BatchEnsembleComplexCNN(nn.Module):
 
 # Training and visualization functions
 
-def train_mnist_model(
+def train_cifar_model(
         model,
         train_loader,
         test_loader,
@@ -799,7 +799,7 @@ def train_with_params(
 
         cnn_models[model_type] = model
         print(f"Training CNN model: {model_type}")
-        tr_losses, te_accuracies = train_mnist_model(
+        tr_losses, te_accuracies = train_cifar_model(
             model,
             train_loader,
             test_loader,
