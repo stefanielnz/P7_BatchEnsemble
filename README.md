@@ -23,7 +23,7 @@ The CIFAR-10 dataset contains 60,000 color images, were each image has a size of
 It is divided into 10 different classes with 6,000 images per class.
 The dataset contains 50,000 training images and 10,000 test images.
 
-CIFAR-20
+The CIFAR-20 dataset is an agumented version of the CIFAR-100 dataset. It uses 20 superclasses instead of the full 100 classes from CIFAR-100.
 
 ---
 
@@ -54,3 +54,10 @@ The project implemented following experiments:
 ---
 
 ## Usage
+Due to the use of DTU HPC clusters the code is split into different tasks and .py-files.
+
+Each .py-file can be normally executed if the requirements are correctly installed and the computational power is enough.
+
+The Jupyter Notebook contains plots for ...
+
+In `data/` are several .csv-files containing results from different experiments which are the base for the plots.
