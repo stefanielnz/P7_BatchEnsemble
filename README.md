@@ -38,7 +38,7 @@ The project implemented following experiments:
 
 ## Setup and Installation
 ### Prerequisites
-- Python 10+
+- Python 3.10+
 - Required Python packages (listed in `requirements.txt`)
 
 ### Installation
