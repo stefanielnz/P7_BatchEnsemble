@@ -30,7 +30,7 @@ The CIFAR-20 dataset is an agumented version of the CIFAR-100 dataset. It uses 2
 ## Experiments
 The deep neural networks used in this project are on the base of VGG11.
 The project implemented following experiments:
-- **BatchEnsemble with Parameter Testing**: Using BatchEnsemble containing of several deep neural networks and test out different values for paramters alpha and gamma 
+- **BatchEnsemble with Parameter Testing**: Testing dependencies between alpha ang gamma initiation and testing ensemble size depending on learning rate
 - **Comparing Optimizers within Single Neural Network and BatchEnsemble**: Compare Adam, SGD and IVON optimizer within a single deep neural network to the usage of a BatchEnsemble
 - **Paramter Sharing within Neural Networks**: Explore parameter sharing between individual networks, between ensemble members and a combination of both
 
@@ -58,7 +58,7 @@ Due to the use of DTU HPC clusters the code is split into different tasks and .p
 
 Each .py-file can be normally executed if the requirements are correctly installed and the computational power is enough.
 
-In `data/` are several .csv-files containing results from different experiments which are the base for the plots.
+In `data/` are several .csv-files containing results from different experiments from parameter and optimizer testing which are the base for the plots.
 Files:
 - ParameterTesting_Optimizer.py: loads CIFAR10, implements simple and batchensemble models, contains training and validation loops based on selection of SGD, Adam and IVON, allows saving of training and validation results for each epoch to csv
 - Parameter_Testing_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
