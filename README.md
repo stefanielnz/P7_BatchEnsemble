@@ -38,7 +38,7 @@ The project implemented following experiments:
 
 ## Setup and Installation
 ### Prerequisites
-- Python 3.7+
+- Python 10+
 - Required Python packages (listed in `requirements.txt`)
 
 ### Installation
@@ -58,6 +58,11 @@ Due to the use of DTU HPC clusters the code is split into different tasks and .p
 
 Each .py-file can be normally executed if the requirements are correctly installed and the computational power is enough.
 
-The Jupyter Notebook contains plots for ...
-
 In `data/` are several .csv-files containing results from different experiments which are the base for the plots.
+Files:
+- ParameterTesting_Optimizer.py: loads CIFAR10, implements simple and batchensemble models, contains training and validation loops based on selection of SGD, Adam and IVON, allows saving of training and validation results for each epoch to csv
+- Parameter_Testing_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
+
+The two notebooks do not produce the plots mentioned in the paper. These are handcrafted in Matlab for easy configuration.
+- CIFAR20_ParamSharing.ipynb: extends the concept of ParamSharing to CIAFR20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
+- ParamSharing.ipynb: trains the VGG11 model on CIFAR10 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
