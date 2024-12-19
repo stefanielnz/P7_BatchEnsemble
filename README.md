@@ -14,7 +14,7 @@ This project explores technics for sharing parameters within neural networks sta
 ---
 
 ## Overview
-
+Ensemble methods are powerful tools for improving the accuracy and reliability of machine learning models. However, they often require a lot of computing power and memory, which can make them difficult to scale. BatchEnsemble provides a solution to this problem by sharing parameters between ensemble members. It uses a common base matrix with small adjustments (low-rank perturbations) that enables efficient parallel processing while maintaining high prediction accuracy. However, as the number of ensemble members increases or tasks become more complex, resource requirements can become a challenge. This study focuses on reducing the number of parameters in neural networks to improve computational efficiency without sacrificing performance. Inspired by BatchEnsemble, we explore new ways of sharing parameters within a single neural network, such as sharing layers or groups of layers. We are applying the benefits of BatchEnsemble to other types of models, including convolutional networks trained on datasets such as CIFAR-10. We are also testing optimization methods such as the IVON optimizer to see how they affect training and performance. The results of this study should provide practical insights into building scalable and resource-efficient machine learning models.
 
 ---
 
