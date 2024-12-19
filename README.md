@@ -54,7 +54,11 @@ The project implemented following experiments:
 ---
 
 ## Usage
-Due to the use of DTU HPC clusters the code is split into different tasks and .py-files.
+
+So that everyone could do the tasks evenly and as we do not all have the same resources available, everyone worked differently.
+We had to run parameter and optimizer testing on the DTU HPC as it was not possible to run local on our laptops. 
+While using the DTU HPC clusters we divided the code into different tasks and .py-files.
+We were able to run parameter sharing on a PC. So it was not necessary to use the DTU HPC for this experiments.
 
 Each .py-file can be normally executed if the requirements are correctly installed and the computational power is enough.
 
