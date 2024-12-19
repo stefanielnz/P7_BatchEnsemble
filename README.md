@@ -64,5 +64,5 @@ Files:
 - Parameter_Testing_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
 
 The two notebooks do not produce the plots mentioned in the paper. These are handcrafted in Matlab for easy configuration.
-- CIFAR-20_ParamSharing.ipynb: extends the concept of ParamSharing to CIFAR-20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
+- CIFAR20_ParamSharing.ipynb: extends the concept of ParamSharing to CIFAR-20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
 - ParamSharing.ipynb: trains the VGG11 model on CIFAR-10 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
