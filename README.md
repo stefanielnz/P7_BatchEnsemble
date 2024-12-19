@@ -60,9 +60,9 @@ Each .py-file can be normally executed if the requirements are correctly install
 
 In `data/` are several .csv-files containing results from different experiments from parameter and optimizer testing which are the base for the plots.
 Files:
-- ParameterTesting_Optimizer.py: loads CIFAR10, implements simple and batchensemble models, contains training and validation loops based on selection of SGD, Adam and IVON, allows saving of training and validation results for each epoch to csv
+- ParameterTesting_Optimizer.py: loads CIFAR-10, implements simple and BatchEnsemble models, contains training and validation loops based on selection of SGD, Adam and IVON, allows saving of training and validation results for each epoch to csv
 - Parameter_Testing_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
 
 The two notebooks do not produce the plots mentioned in the paper. These are handcrafted in Matlab for easy configuration.
-- CIFAR20_ParamSharing.ipynb: extends the concept of ParamSharing to CIAFR20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
-- ParamSharing.ipynb: trains the VGG11 model on CIFAR10 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
+- CIFAR-20_ParamSharing.ipynb: extends the concept of ParamSharing to CIFAR-20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
+- ParamSharing.ipynb: trains the VGG11 model on CIFAR-10 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
