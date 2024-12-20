@@ -1005,9 +1005,8 @@ app = typer.Typer()
 
 @app.command()
 def run_experiments():
-    # Test paramter alpha, gamma and ensemble size
 
-    """Defines a CLI to test multiple parameter combinations."""
+    # Defines multiple parameter combinations
     alpha_list = [-1, -0.8, -0.5, -0.2, 0, 0.2, 0.5, 0.8, 1]
     gamma_list =  [-1, -0.8, -0.5, -0.2, 0, 0.2, 0.5, 0.8, 1]
     ensemble_size_list = [2]#[2, 3, 4, 5, 6, 7, 8, 9, 10]
@@ -1019,26 +1018,29 @@ def run_experiments():
     output_folder = "data"
     os.makedirs(output_folder, exist_ok=True)
 
-    alpha_gamma_file = os.path.join(output_folder, "alpha_gamma_results-loss.csv")
-    ensemble_size_file = os.path.join(output_folder, "ensemble_size_results-loss.csv")
-
-
-    # # test different alpha and gamma values
-    # for alpha in alpha_list:
-    #     for gamma in gamma_list:
-    #         print(f"Next calculation with differences in alpha and gamma: alpha={alpha} and gamma={gamma}")
-    #         results = train_with_params(seed=42, ensemble_size=2, alpha_init=alpha, gamma_init=gamma, num_epochs=15, batch_size=256, lr=0.0002, device=device, mode="parameter")
-    #         save_results_to_csv(results, alpha_gamma_file)
+    # For the parameter testing of alpha-gamma and ensemble size, the commenting out must be removed for this section so it can run
+    """
+    alpha_gamma_file = os.path.join(output_folder, "alpha_gamma_results.csv")
+    ensemble_size_file = os.path.join(output_folder, "ensemble_size_results.csv")
+    
+    # test different alpha and gamma values
+    for alpha in alpha_list:
+        for gamma in gamma_list:
+             print(f"Next calculation with differences in alpha and gamma: alpha={alpha} and gamma={gamma}")
+             results = train_with_params(seed=42, ensemble_size=2, alpha_init=alpha, gamma_init=gamma, num_epochs=15, batch_size=256, lr=0.0002, device=device, mode="parameter")
+             save_results_to_csv(results, alpha_gamma_file)
 
     
-    # # test ensemble size
-    # results = train_with_params(seed=42, ensemble_size=2, alpha_init=0.2, gamma_init=1.0, num_epochs=15, batch_size=256, lr=0.0002, device=device, mode="parameter")
-    # for lr in lr_list:
-    #     for ensemble_size in ensemble_size_list:
-    #         print(f"Next calculation with differences in ensemble size: ensemble size = {ensemble_size}")
-    #         results = train_with_params(seed=42, ensemble_size=ensemble_size, alpha_init=0.5, gamma_init=0.5, num_epochs=15, batch_size=ensemble_size, lr=lr, device=device, mode="parameter")
-    #         save_results_to_csv(results, ensemble_size_file)
-    
+    # test ensemble size
+    for lr in lr_list:
+        for ensemble_size in ensemble_size_list:
+             print(f"Next calculation with differences in ensemble size: ensemble size = {ensemble_size}")
+              results = train_with_params(seed=42, ensemble_size=ensemble_size, alpha_init=0.5, gamma_init=0.5, num_epochs=15, batch_size=ensemble_size, lr=lr, device=device, mode="parameter")
+              save_results_to_csv(results, ensemble_size_file)
+              
+    """
+
+    # For the optimizer testing with adan, sgd and ivon, the commenting out must be removed for this section so it can run
     """
     # test optimizer
     alpha = 1.0
