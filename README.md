@@ -67,6 +67,7 @@ Each .py- and .ipynb-file can be normally executed if the requirements are corre
 In `data/` are several .csv-files containing results from different experiments from parameter and optimizer testing which are the base for the plots.
 Files:
 - ParameterTesting_Optimizer.py: loads CIFAR-10, implements simple and BatchEnsemble models, contains training and validation loops based on selection of SGD, Adam and IVON, allows saving of training and validation results for each epoch to csv
+- ParameterTesting_Optimizer_simple.ipynb: is a simplified case of ParameterTesting_Optimizer.py that can run local
 - ParameterTesting_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
 
 The two notebooks do not produce the plots mentioned in the paper. These are handcrafted in Matlab for easy configuration.
