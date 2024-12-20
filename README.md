@@ -30,7 +30,7 @@ The CIFAR-20 dataset is an agumented version of the CIFAR-100 dataset. It uses 2
 ## Experiments
 The deep neural networks used in this project are on the base of VGG11.
 The project implemented following experiments:
-- **BatchEnsemble with Parameter Testing**: Testing dependencies between alpha and gamma initiation and testing ensemble size depending on learning rate
+- **BatchEnsemble with Parameter Testing**: Test dependencies between alpha and gamma initiation and test ensemble size depending on learning rate
 - **Comparing Optimizers within Single Neural Network and BatchEnsemble**: Compare Adam, SGD and IVON optimizer within a single deep neural network to the usage of a BatchEnsemble
 - **Paramter Sharing within Neural Networks**: Explore parameter sharing between individual networks, between ensemble members and a combination of both
 
@@ -55,17 +55,17 @@ The project implemented following experiments:
 
 ## Usage
 
-So that everyone could do the tasks evenly and as we do not all have the same resources available, everyone worked differently.
-We had to run parameter and optimizer testing on the DTU HPC as it was not possible to run local on our laptops. 
-While using the DTU HPC clusters we divided the code into different tasks and .py-files.
-We were able to run parameter sharing on a PC. So it was not necessary to use the DTU HPC for this experiments.
+So that everyone could complete the tasks equally and as we don't all have the same resources available, everyone worked differently.
+We had to run the parameter and optimizer tests on the DTU HPC as it was not possible to run them locally on our laptops. 
+While using the DTU HPC clusters, we split the code into different tasks and .py files.
+We were able to perform parameter sharing on one PC. So it was not necessary to use the DTU HPC for these experiments.
 
 Each .py- and .ipynb-file can be normally executed if the requirements are correctly installed and the computational power is enough.
 
 In `data/` are several .csv-files containing results from different experiments from parameter and optimizer testing which are the base for the plots.
 Files:
 - ParameterTesting_Optimizer.py: loads CIFAR-10, implements simple and BatchEnsemble models, contains training and validation loops based on selection of SGD, Adam and IVON, allows saving of training and validation results for each epoch to csv
-- Parameter_Testing_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
+- ParameterTesting_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
 
 The two notebooks do not produce the plots mentioned in the paper. These are handcrafted in Matlab for easy configuration.
 - CIFAR20_ParameterSharing.ipynb: extends the concept of ParamSharing to CIFAR-20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
