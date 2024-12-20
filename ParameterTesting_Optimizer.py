@@ -1,5 +1,4 @@
 import typer
-# Import necessary libraries
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,6 +7,10 @@ import torch.optim as optim
 import os
 import csv
 import ivon
+
+"""
+Please note to change the desired parameter and experiments in the lines: 860, 1027, 1049
+"""
 
 # BatchEnsemble implementation
 
@@ -853,6 +856,9 @@ def train_with_params(
     )
 
     # Define model types, including 'complex' and 'batchensemble_complex' -> change for specific cases
+    """
+    For specific cases please uncommand/command the model types
+    """
     model_types = [
         # "simple",
         # "batchensemble",
@@ -1009,8 +1015,8 @@ def run_experiments():
     # Defines multiple parameter combinations
     alpha_list = [-1, -0.8, -0.5, -0.2, 0, 0.2, 0.5, 0.8, 1]
     gamma_list =  [-1, -0.8, -0.5, -0.2, 0, 0.2, 0.5, 0.8, 1]
-    ensemble_size_list = [2]#[2, 3, 4, 5, 6, 7, 8, 9, 10]
-    lr_list = [0.0002]#[0.02, 0.002, 0.0002]
+    ensemble_size_list = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+    lr_list = [0.02, 0.002, 0.0002]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -1040,12 +1046,13 @@ def run_experiments():
               
     """
 
-    # For the optimizer testing with adan, sgd and ivon, the commenting out must be removed for this section so it can run
+    # For the optimizer testing with adam, sgd and ivon, the commenting out must be removed for this section so it can run
+    # Select the desired alpha, gamma, ensemble size, learning rate and optimizer type
     """
     # test optimizer
     alpha = 1.0
     gamma =  0.2
-    ensemble_size = 2 # 2, 4, 8
+    ensemble_size = 2
     lr = 0.002
     optimizer_type = "adam" # adam, sgd, ivon
 
