@@ -1,6 +1,6 @@
 # Investigating Parameter Sharing in Neural Networks
 
-This project explores technics for sharing parameters within neural networks starting with investigating BatchEnsembles, were the result of several neural networks are being considered. For further exploration three optimizers are bein compared and evaluated. Furthermore, the actual sharing of parameters within a neural network as well as an ensemble is being execuded.
+This project explores technics for sharing parameters within neural networks starting with investigating BatchEnsembles, were the result of several neural networks are being considered. For further exploration three optimizers are being compared and evaluated. Furthermore, the actual sharing of parameters within a neural network as well as an ensemble is being execuded.
 
 ---
 
@@ -30,7 +30,7 @@ The CIFAR-20 dataset is an agumented version of the CIFAR-100 dataset. It uses 2
 ## Experiments
 The deep neural networks used in this project are on the base of VGG11.
 The project implemented following experiments:
-- **BatchEnsemble with Parameter Testing**: Testing dependencies between alpha ang gamma initiation and testing ensemble size depending on learning rate
+- **BatchEnsemble with Parameter Testing**: Testing dependencies between alpha and gamma initiation and testing ensemble size depending on learning rate
 - **Comparing Optimizers within Single Neural Network and BatchEnsemble**: Compare Adam, SGD and IVON optimizer within a single deep neural network to the usage of a BatchEnsemble
 - **Paramter Sharing within Neural Networks**: Explore parameter sharing between individual networks, between ensemble members and a combination of both
 
@@ -60,7 +60,7 @@ We had to run parameter and optimizer testing on the DTU HPC as it was not possi
 While using the DTU HPC clusters we divided the code into different tasks and .py-files.
 We were able to run parameter sharing on a PC. So it was not necessary to use the DTU HPC for this experiments.
 
-Each .py-file can be normally executed if the requirements are correctly installed and the computational power is enough.
+Each .py- and .ipynb-file can be normally executed if the requirements are correctly installed and the computational power is enough.
 
 In `data/` are several .csv-files containing results from different experiments from parameter and optimizer testing which are the base for the plots.
 Files:
@@ -68,5 +68,5 @@ Files:
 - Parameter_Testing_Optimizer_plots: contains code that loads data from all result csv files and plots them in suitable ways
 
 The two notebooks do not produce the plots mentioned in the paper. These are handcrafted in Matlab for easy configuration.
-- CIFAR20_ParamSharing.ipynb: extends the concept of ParamSharing to CIFAR-20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
-- ParamSharing.ipynb: trains the VGG11 model on CIFAR-10 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
+- CIFAR20_ParameterSharing.ipynb: extends the concept of ParamSharing to CIFAR-20 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
+- ParameterSharing.ipynb: trains the VGG11 model on CIFAR-10 with three different sharing regimens (within model, within ensemble, both combined) in the 4 sharing intensities (no sharing, early layer sharing, deep layer sharing, all layer sharing)
