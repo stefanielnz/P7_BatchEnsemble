@@ -60,6 +60,8 @@ We had to run the parameter and optimizer tests on the DTU HPC as it was not pos
 While using the DTU HPC clusters, we split the code into different tasks and .py files.
 We were able to perform parameter sharing on one PC. So it was not necessary to use the DTU HPC for these experiments.
 
+We created one notebook from our "ParameterTesting_Optimizer.py" in order to demonstrate the code and some results. It contains results for only a small part of the experiment on the simple architecture.
+
 Each .py- and .ipynb-file can be normally executed if the requirements are correctly installed and the computational power is enough.
 
 In `data/` are several .csv-files containing results from different experiments from parameter and optimizer testing which are the base for the plots.
